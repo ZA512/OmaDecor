@@ -15,7 +15,10 @@ Scope {
     property bool nativeDecorationLoaded: false
     property string nativeDecorationVersion: ""
     property bool effectsEngineLoaded: false
+    property string effectsEngineName: ""
     property string effectsEngineVersion: ""
+    property string effectsEngineAuthor: ""
+    property string effectsEngineDescription: ""
 
     property string hyprlandVersion: ""
     property string hyprlandCommit: ""
@@ -35,7 +38,10 @@ Scope {
         root.nativeDecorationLoaded = false
         root.nativeDecorationVersion = ""
         root.effectsEngineLoaded = false
+        root.effectsEngineName = ""
         root.effectsEngineVersion = ""
+        root.effectsEngineAuthor = ""
+        root.effectsEngineDescription = ""
         try {
             var plugins = JSON.parse(String(rawText || "[]"))
             if (!Array.isArray(plugins)) throw new Error("plugin list is not an array")
@@ -48,7 +54,10 @@ Scope {
                 }
                 if (name.toLowerCase() === "hyprwindowshade") {
                     root.effectsEngineLoaded = true
+                    root.effectsEngineName = name
                     root.effectsEngineVersion = String(plugin.version || "")
+                    root.effectsEngineAuthor = String(plugin.author || "")
+                    root.effectsEngineDescription = String(plugin.description || "")
                 }
             }
         } catch (error) {
@@ -127,7 +136,10 @@ Scope {
             },
             effects: {
                 loaded: root.effectsEngineLoaded,
-                version: root.effectsEngineVersion
+                name: root.effectsEngineName,
+                version: root.effectsEngineVersion,
+                author: root.effectsEngineAuthor,
+                description: root.effectsEngineDescription
             },
             monitors: root.monitors
         }

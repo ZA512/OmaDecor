@@ -4,6 +4,7 @@ import Quickshell.Hyprland
 import Quickshell.Io
 import "core"
 import "decorations"
+import "effects"
 import "hud"
 
 Scope {
@@ -24,7 +25,19 @@ Scope {
     readonly property bool decorationsEnabled: configStore.decorationsEnabled
     readonly property bool hudEnabled: configStore.hudEnabled
     readonly property bool effectsEnabled: configStore.effectsEnabled
+    readonly property var effectsEvents: configStore.effectsEvents
+    readonly property string effectsCompatibilityStatus: effectsManager.status
+    readonly property bool effectsAllowed: effectsManager.allowed
+    readonly property bool effectsActive: effectsManager.active
+    readonly property bool effectsPending: effectsManager.pending
+    readonly property string effectsApplyState: effectsManager.applyState
+    readonly property string effectsError: effectsManager.lastError
+    readonly property string effectsGeneratedPath: effectsManager.generatedPath
+    readonly property bool effectsEngineInstalled: effectsManager.engineDetector.installed
+    readonly property bool effectsOverrideActive: effectsManager.compatibility.overrideActive
     readonly property bool nativeDecorationLoaded: runtimeDiagnostics.nativeDecorationLoaded
+    readonly property bool effectsEngineLoaded: runtimeDiagnostics.effectsEngineLoaded
+    readonly property string effectsEngineVersion: runtimeDiagnostics.effectsEngineVersion
     readonly property string nativeApplyState: nativeBridge.state
     readonly property string decorationStyle: configStore.decorationStyle
     readonly property int lightWidth: configStore.lightWidth
@@ -91,6 +104,30 @@ Scope {
         } catch (error) {
             return "invalid"
         }
+    }
+
+    function setEffectEvent(eventName, effectId) {
+        return configStore.setEffectEvent(eventName, effectId) ? "ok" : "invalid"
+    }
+
+    function cycleEffect(eventName) {
+        return effectsManager.cycleEffect(eventName)
+    }
+
+    function effectDisplayName(effectId) {
+        return effectsManager.displayName(effectId)
+    }
+
+    function applyEffects() {
+        return effectsManager.applyConfiguration() ? "applying" : "busy"
+    }
+
+    function testEffectsAnyway() {
+        return effectsManager.testAnyway()
+    }
+
+    function clearEffectsOverride() {
+        return effectsManager.clearOverride()
     }
 
     function addApplication(value) {
@@ -177,8 +214,18 @@ Scope {
                 },
                 effects: {
                     enabled: root.effectsEnabled,
+                    engineInstalled: effectsManager.engineDetector.installed,
                     engineLoaded: runtimeDiagnostics.effectsEngineLoaded,
-                    engineVersion: runtimeDiagnostics.effectsEngineVersion
+                    engineName: runtimeDiagnostics.effectsEngineName,
+                    engineVersion: runtimeDiagnostics.effectsEngineVersion,
+                    engineAuthor: runtimeDiagnostics.effectsEngineAuthor,
+                    engineDescription: runtimeDiagnostics.effectsEngineDescription,
+                    compatibility: effectsManager.status,
+                    allowed: effectsManager.allowed,
+                    active: effectsManager.active,
+                    overrideActive: effectsManager.compatibility.overrideActive,
+                    events: configStore.effectsEvents,
+                    manager: effectsManager.diagnostics()
                 }
             },
             config: configStore.diagnostics(),
@@ -259,6 +306,22 @@ Scope {
             return root.setDecorationSettings(valueJson)
         }
 
+        function setEffectEvent(eventName: string, effectId: string): string {
+            return root.setEffectEvent(eventName, effectId)
+        }
+
+        function applyEffects(): string {
+            return root.applyEffects()
+        }
+
+        function testEffectsAnyway(): string {
+            return root.testEffectsAnyway()
+        }
+
+        function clearEffectsOverride(): string {
+            return root.clearEffectsOverride()
+        }
+
         function addApplication(valueJson: string): string {
             return root.addApplicationJson(valueJson)
         }
@@ -329,6 +392,12 @@ Scope {
         config: configStore
         runtimeAvailable: runtimeDiagnostics.nativeDecorationLoaded
         themeAccent: themeBridge.accentHex
+    }
+
+    EffectsManager {
+        id: effectsManager
+        config: configStore
+        runtime: runtimeDiagnostics
     }
 
     Connections {

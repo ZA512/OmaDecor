@@ -7,10 +7,20 @@
   "description": "Native Hyprland window decorations with a Quickshell HUD and settings panel.",
   "kinds": [
     "service",
-    "panel"
+    "panel",
+    "bar-widget"
   ],
+  "keepLoaded": true,
   "entryPoints": {
     "service": "Service.qml",
-    "panel": "Panel.qml"
+    "panel": "Panel.qml",
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "OmaDecor",
+    "description": "Open OmaDecor settings and inspect module state",
+    "category": "System",
+    "allowMultiple": false,
+    "defaultSection": "right"
   }
 }

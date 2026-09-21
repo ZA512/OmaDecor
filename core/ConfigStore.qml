@@ -31,6 +31,21 @@ Scope {
     property bool hudEnabled: false
     property string hudScope: "active-window"
     property bool effectsEnabled: false
+    property var effectsEvents: ({
+        open: "simple-fade-open",
+        close: "simple-fade-close",
+        move: "none",
+        resize: "none",
+        workspace: "none",
+        fullscreenEnter: "none",
+        fullscreenExit: "none",
+        float: "none",
+        tile: "none",
+        focus: "none",
+        unfocus: "none",
+        urgent: "none"
+    })
+    property string effectsOverrideFingerprint: ""
     property var applications: []
     property var hudClassExclusions: []
     property var effectsClassExclusions: []
@@ -65,7 +80,21 @@ Scope {
             },
             effects: {
                 enabled: false,
-                events: {}
+                events: {
+                    open: "simple-fade-open",
+                    close: "simple-fade-close",
+                    move: "none",
+                    resize: "none",
+                    workspace: "none",
+                    fullscreenEnter: "none",
+                    fullscreenExit: "none",
+                    float: "none",
+                    tile: "none",
+                    focus: "none",
+                    unfocus: "none",
+                    urgent: "none"
+                },
+                overrideFingerprint: ""
             },
             applications: []
         }
@@ -106,6 +135,25 @@ Scope {
     function normalizedText(value, maximum) {
         var text = String(value || "").replace(/[\n\r\0]/g, " ").trim()
         return text.slice(0, maximum)
+    }
+
+    function normalizedEffectId(value, fallback) {
+        var effectId = String(value || "")
+        var allowed = ["none", "simple-fade-open", "simple-fade-close", "soft-focus-pulse", "simple-wobble"]
+        return allowed.indexOf(effectId) !== -1 ? effectId : fallback
+    }
+
+    function normalizedEffectEvents(value) {
+        var incoming = root.objectValue(value, {})
+        var defaults = root.defaults().effects.events
+        var result = ({})
+        var names = ["open", "close", "move", "resize", "workspace", "fullscreenEnter",
+            "fullscreenExit", "float", "tile", "focus", "unfocus", "urgent"]
+        for (var index = 0; index < names.length; index++) {
+            var name = names[index]
+            result[name] = root.normalizedEffectId(incoming[name], defaults[name])
+        }
+        return result
     }
 
     function normalizedApplication(value) {
@@ -179,7 +227,8 @@ Scope {
             },
             effects: {
                 enabled: effects.enabled === true,
-                events: root.objectValue(effects.events, {})
+                events: root.normalizedEffectEvents(effects.events),
+                overrideFingerprint: root.normalizedText(effects.overrideFingerprint, 512)
             },
             applications: root.normalizedApplications(data.applications)
         }
@@ -201,6 +250,8 @@ Scope {
         root.hudEnabled = clean.hud.enabled
         root.hudScope = clean.hud.scope
         root.effectsEnabled = clean.effects.enabled
+        root.effectsEvents = clean.effects.events
+        root.effectsOverrideFingerprint = clean.effects.overrideFingerprint
         root.applications = clean.applications
         root.refreshApplicationExclusions()
         root.revision += 1
@@ -230,7 +281,8 @@ Scope {
             },
             effects: {
                 enabled: root.effectsEnabled,
-                events: {}
+                events: root.effectsEvents,
+                overrideFingerprint: root.effectsOverrideFingerprint
             },
             applications: root.applications
         })
@@ -339,6 +391,30 @@ Scope {
         root.revision += 1
         root.configurationChanged()
         root.scheduleSave()
+    }
+
+    function setEffectEvent(eventName, effectId) {
+        var name = String(eventName || "")
+        var allowedEvents = ["open", "close", "move", "resize", "workspace", "fullscreenEnter",
+            "fullscreenExit", "float", "tile", "focus", "unfocus", "urgent"]
+        if (allowedEvents.indexOf(name) === -1) return false
+        var cleanId = root.normalizedEffectId(effectId, "none")
+        var next = ({})
+        for (var key in root.effectsEvents) next[key] = root.effectsEvents[key]
+        next[name] = cleanId
+        root.effectsEvents = next
+        root.revision += 1
+        root.configurationChanged()
+        root.scheduleSave()
+        return true
+    }
+
+    function setEffectsOverrideFingerprint(value) {
+        root.effectsOverrideFingerprint = root.normalizedText(value, 512)
+        root.revision += 1
+        root.configurationChanged()
+        root.scheduleSave()
+        return true
     }
 
     function addApplication(value) {

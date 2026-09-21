@@ -51,14 +51,14 @@ HyprWindowShade fournit actuellement les shaders par fenêtre ainsi que des év�
 
 Il supporte également des règles fallback `_default`, la composition de plusieurs shaders et l’exclusion automatique du fullscreen par défaut.
 
-Le code actuel de HyprWindowShade s’identifie lui-même comme :
+Le code HyprWindowShade examiné au commit `4414596c2fbb64cb5bb4aa7342900051338fed7a` s’identifie comme :
 
 * nom : `HyprWindowShade` ;
 * auteur : `ManofJELLO` ;
-* version : `1.4` dans l’état actuel du dépôt ;
+* version exposée : chaîne vide dans l’état actuel du dépôt ;
 * description : `Native CShader Injection (v0.56)`.
 
-Cette information est exposée à Hyprland et peut être récupérée depuis la liste des plugins chargés.
+Cette information est exposée à Hyprland et peut être récupérée depuis la liste des plugins chargés. La compatibilité ne doit donc pas dépendre d’un numéro de version supposé : elle utilise aussi le commit/ABI Hyprland et les métadonnées réellement exposées.
 
 OmaDecor constitue donc la couche :
 
@@ -106,11 +106,14 @@ manifest.json
 kinds:
   - service
   - panel
+  - bar-widget
 ```
 
 Le `service` exécute le HUD, l’interface et l’orchestration. La décoration s’exécute dans le plugin natif Hyprland.
 
 Le `panel` fournit l’interface de configuration.
+
+Le `bar-widget` rend cette interface accessible depuis la barre Omarchy et résume l’état des modules.
 
 Le service doit rester chargé tant que le plugin est activé.
 
@@ -676,6 +679,12 @@ L’utilisateur ajoute **une fois** dans sa configuration Hyprland l’import re
 Le README doit expliquer précisément cette étape.
 
 Après cela, OmaDecor est libre de régénérer uniquement `omadecor.lua`.
+
+Avec l’arborescence Omarchy actuelle, l’import utilisateur est :
+
+```lua
+require("hypr.omadecor")
+```
 
 L’écriture doit être :
 
@@ -1400,7 +1409,7 @@ Ne pas essayer immédiatement de construire :
 
 Avant de construire le GUI complet :
 
-1. créer un plugin Omarchy minimal `service + panel` ;
+1. créer un plugin Omarchy minimal `service + panel + bar-widget` ;
 2. construire un plugin de décoration natif pour l’ABI Hyprland exacte ;
 3. dessiner Raised Edge avec `IHyprWindowDecoration` ;
 4. supprimer toute surface de décoration Quickshell ;
@@ -1487,6 +1496,8 @@ safe suspension
 
 Aucun téléchargement automatique.
 
+Décision M4 : `EngineDetector` inspecte passivement l’état hyprpm et les plugins chargés. `CompatibilityManager` construit un fingerprint avec la version, le commit et l’ABI Hyprland ainsi que les métadonnées HyprWindowShade réellement disponibles. Une combinaison inconnue est `UNTESTED`, suspendue par défaut, et l’override utilisateur est lié au fingerprint exact.
+
 ---
 
 # 46. Milestone 5 — Effects configuration
@@ -1502,6 +1513,8 @@ application exclusion
 omadecor.lua generation
 Apply workflow
 ```
+
+Décision M5 : le catalogue embarqué fournit un fade open/close, un pulse focus et un wobble de mouvement, tous identifiés comme OmaDecor. `EffectsManager` génère atomiquement `~/.config/hypr/omadecor.lua` avec des règles exclusivement préfixées `omadecor-effects-*`, puis recharge Hyprland uniquement sur Apply. Les exclusions applicatives utilisent des tags spécifiques pass-through qui gagnent sur les fallbacks globaux.
 
 Tester au minimum :
 

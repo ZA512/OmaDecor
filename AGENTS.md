@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-`docs/PRD.md` defines product behavior; approved architecture and spike evidence live in `docs/DEVBOOK.md` and `docs/TECHNICAL_SPIKE.md`. The compositor-native Raised Edge implementation is in `native/`. Quickshell entry points are `Panel.qml`, `Service.qml`, and `manifest.json`.
+`docs/PRD.md` defines product behavior; approved architecture and spike evidence live in `docs/DEVBOOK.md` and `docs/TECHNICAL_SPIKE.md`. The compositor-native Raised Edge implementation is in `native/`. Quickshell entry points are `BarWidget.qml`, `Panel.qml`, `Service.qml`, and `manifest.json`.
 
 Keep persistent configuration, theme/diagnostic bridges, and normalized HUD state in `core/`; native style metadata and registries in `decorations/`; click-through HUD surfaces and system metrics in `hud/`; HyprWindowShade orchestration in `effects/`; compatibility fingerprints in `compatibility/`; settings pages in `ui/`; and automated checks in `tests/`. Decorations must not depend on Quickshell geometry tracking, and neither Decorations nor HUD may depend on Effects.
 

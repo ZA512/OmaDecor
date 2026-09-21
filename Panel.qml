@@ -17,6 +17,9 @@ Item {
     property string currentPage: "overview"
     property bool draftDirty: false
     property string actionMessage: ""
+    readonly property string effectsInstallCommands: "hyprpm add https://github.com/ManofJELLO/HyprWindowShade\n"
+        + "hyprpm enable HyprWindowShade\n"
+        + "hyprpm reload"
 
     readonly property color panelColor: Commons.Color.popups.background
     readonly property color foregroundColor: Commons.Color.popups.text
@@ -55,6 +58,7 @@ Item {
             root.service.recordPanelOpened(payloadJson, root.serviceIdentityMatched)
         }
         root.currentPage = payload.page === "applications" || payload.page === "decorations"
+            || payload.page === "effects"
             ? payload.page : "overview"
         root.actionMessage = ""
         root.syncDraft()
@@ -96,6 +100,21 @@ Item {
         }
         values[key] = !values[key]
         root.service.setApplicationExclusions(entry.appClass, values)
+    }
+
+    function effectsStatusText() {
+        if (!root.service) return "Effects service unavailable"
+        var status = root.service.effectsCompatibilityStatus
+        if (status === "NOT_INSTALLED")
+            return "Effects engine not installed. Decorations and HUD continue to work normally."
+        if (status === "INSTALLED_NOT_LOADED")
+            return "HyprWindowShade is installed but not loaded. Run hyprpm reload, then check again."
+        if (status === "VALIDATED") return "HyprWindowShade is validated for this Hyprland ABI."
+        if (status === "UNTESTED" && root.service.effectsOverrideActive)
+            return "Untested engine fingerprint — user override active."
+        if (status === "UNTESTED")
+            return "HyprWindowShade has not been validated with this exact Hyprland ABI. Effects are safely suspended."
+        return "Window effects are unavailable: " + (root.service.effectsError || status)
     }
 
     component ActionButton: Rectangle {
@@ -236,6 +255,41 @@ Item {
         }
     }
 
+    component EffectRow: Rectangle {
+        id: effectRow
+
+        required property string eventName
+        required property string title
+        readonly property string effectId: root.service
+            ? String(root.service.effectsEvents[eventName] || "none") : "none"
+
+        width: effectsGrid.width > 0 ? (effectsGrid.width - 8) / 2 : 0
+        height: 42
+        radius: 7
+        color: Commons.Color.background
+        border.color: Commons.Color.popups.border
+
+        Text {
+            anchors.left: parent.left
+            anchors.leftMargin: 10
+            anchors.verticalCenter: parent.verticalCenter
+            text: effectRow.title
+            color: root.foregroundColor
+            font.pixelSize: 12
+            font.bold: true
+        }
+
+        ActionButton {
+            anchors.right: parent.right
+            anchors.rightMargin: 6
+            anchors.verticalCenter: parent.verticalCenter
+            label: root.service ? root.service.effectDisplayName(effectRow.effectId) : "None"
+            buttonWidth: 118
+            selected: effectRow.effectId !== "none"
+            onClicked: if (root.service) root.actionMessage = root.service.cycleEffect(effectRow.eventName)
+        }
+    }
+
     PanelWindow {
         id: window
         visible: root.opened
@@ -258,7 +312,7 @@ Item {
             id: card
             anchors.centerIn: parent
             width: Math.min(760, window.width - 40)
-            height: Math.min(640, window.height - 40)
+            height: Math.min(760, window.height - 40)
             radius: 12
             color: root.panelColor
             border.color: Commons.Color.popups.border
@@ -292,6 +346,7 @@ Item {
                             spacing: 6
                             ActionButton { label: "Overview"; buttonWidth: 86; selected: root.currentPage === "overview"; onClicked: root.currentPage = "overview" }
                             ActionButton { label: "Decoration"; buttonWidth: 92; selected: root.currentPage === "decorations"; onClicked: { root.currentPage = "decorations"; root.syncDraft() } }
+                            ActionButton { label: "Effects"; buttonWidth: 78; selected: root.currentPage === "effects"; onClicked: { root.currentPage = "effects"; if (root.service) root.service.refresh() } }
                             ActionButton { label: "Applications"; buttonWidth: 98; selected: root.currentPage === "applications"; onClicked: root.currentPage = "applications" }
                         }
                     }
@@ -334,8 +389,9 @@ Item {
                             ModuleRow {
                                 title: "Window Effects"
                                 active: root.service ? root.service.effectsEnabled : false
-                                available: false
-                                detail: "HyprWindowShade integration arrives after HUD"
+                                available: root.service ? root.service.effectsEngineInstalled : false
+                                detail: root.service ? "HyprWindowShade · " + root.service.effectsCompatibilityStatus
+                                    + (root.service.effectsPending ? " · changes pending" : "") : "Unavailable"
                                 onToggleRequested: function(nextValue) { if (root.service) root.service.setModuleEnabled("effects", nextValue) }
                             }
                             Text {
@@ -344,6 +400,123 @@ Item {
                                     + root.service.nativeApplyState + " · HUD " + root.service.trackerState : ""
                                 color: root.mutedColor
                                 font.pixelSize: 12
+                            }
+                        }
+
+                        Column {
+                            anchors.fill: parent
+                            spacing: 9
+                            visible: root.currentPage === "effects"
+
+                            Row {
+                                width: parent.width
+                                spacing: 10
+                                Text {
+                                    width: parent.width - effectsToggle.width - 10
+                                    text: "Window Effects"
+                                    color: root.foregroundColor
+                                    font.pixelSize: 18
+                                    font.bold: true
+                                }
+                                TogglePill {
+                                    id: effectsToggle
+                                    label: "Effects"
+                                    checked: root.service ? root.service.effectsEnabled : false
+                                    onToggled: if (root.service) root.service.setModuleEnabled("effects", !checked)
+                                }
+                            }
+
+                            Text {
+                                width: parent.width
+                                text: root.effectsStatusText()
+                                color: root.service && root.service.effectsAllowed
+                                    ? root.accentColor : Commons.Color.urgent
+                                font.pixelSize: 12
+                                wrapMode: Text.Wrap
+                            }
+
+                            Rectangle {
+                                width: parent.width
+                                height: installColumn.implicitHeight + 16
+                                radius: 7
+                                color: Commons.Color.background
+                                border.color: Commons.Color.popups.border
+                                visible: root.service && !root.service.effectsEngineLoaded
+
+                                Column {
+                                    id: installColumn
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    anchors.top: parent.top
+                                    anchors.margins: 8
+                                    spacing: 5
+                                    Text { text: "Window effects powered by HyprWindowShade · ManofJELLO · external MIT project"; color: root.mutedColor; font.pixelSize: 11 }
+                                    Text { text: root.effectsInstallCommands; color: root.foregroundColor; font.pixelSize: 11; font.family: "monospace" }
+                                }
+                            }
+
+                            Grid {
+                                id: effectsGrid
+                                width: parent.width
+                                columns: 2
+                                columnSpacing: 8
+                                rowSpacing: 6
+
+                                EffectRow { eventName: "open"; title: "Open" }
+                                EffectRow { eventName: "close"; title: "Close" }
+                                EffectRow { eventName: "move"; title: "Move" }
+                                EffectRow { eventName: "resize"; title: "Resize" }
+                                EffectRow { eventName: "workspace"; title: "Workspace" }
+                                EffectRow { eventName: "focus"; title: "Focus" }
+                                EffectRow { eventName: "unfocus"; title: "Unfocus" }
+                                EffectRow { eventName: "urgent"; title: "Urgent" }
+                                EffectRow { eventName: "float"; title: "Float" }
+                                EffectRow { eventName: "tile"; title: "Tile" }
+                                EffectRow { eventName: "fullscreenEnter"; title: "Fullscreen in" }
+                                EffectRow { eventName: "fullscreenExit"; title: "Fullscreen out" }
+                            }
+
+                            Row {
+                                spacing: 8
+                                ActionButton {
+                                    label: "Copy install"
+                                    buttonWidth: 105
+                                    visible: root.service && !root.service.effectsEngineLoaded
+                                    onClicked: {
+                                        Quickshell.execDetached(["/usr/bin/wl-copy", root.effectsInstallCommands])
+                                        root.actionMessage = "Installation commands copied"
+                                    }
+                                }
+                                ActionButton {
+                                    label: "Check again"
+                                    buttonWidth: 105
+                                    onClicked: if (root.service) root.actionMessage = root.service.refresh()
+                                }
+                                ActionButton {
+                                    label: "Test anyway"
+                                    buttonWidth: 105
+                                    visible: root.service && root.service.effectsCompatibilityStatus === "UNTESTED"
+                                        && !root.service.effectsOverrideActive
+                                    onClicked: if (root.service) root.actionMessage = root.service.testEffectsAnyway()
+                                }
+                                ActionButton {
+                                    label: "Apply"
+                                    buttonWidth: 90
+                                    selected: root.service ? root.service.effectsPending : false
+                                    enabled: root.service ? root.service.effectsPending : false
+                                    onClicked: if (root.service) root.actionMessage = root.service.applyEffects()
+                                }
+                            }
+
+                            Text {
+                                width: parent.width
+                                text: root.service ? (root.service.effectsPending ? "Changes pending"
+                                    : "State: " + root.service.effectsApplyState)
+                                    + (root.service.effectsError ? " · " + root.service.effectsError : "") : ""
+                                color: root.service && root.service.effectsError === ""
+                                    ? root.mutedColor : Commons.Color.urgent
+                                font.pixelSize: 11
+                                wrapMode: Text.Wrap
                             }
                         }
 
