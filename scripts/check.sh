@@ -38,7 +38,7 @@ jq -e '
   and .settings.inactiveOpacity.default == 0.55
 ' decorations/styles/RaisedEdge.json >/dev/null
 
-jq -e '.schemaVersion == 1 and (.validated | type == "array")' \
+jq -e '.schemaVersion == 1 and (.validated | type == "array") and (.effects | type == "array")' \
   compatibility/hyprwindowshade.json >/dev/null
 
 if command -v node >/dev/null 2>&1; then

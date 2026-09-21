@@ -15,7 +15,7 @@ component after every Hyprland update.
 - **HUD:** window title/workspace and system metrics are implemented. It hides
   while the active window moves or resizes, then reappears after settling.
 - **Effects:** HyprWindowShade detection, compatibility suspension, event
-  mapping, per-application exclusion, and owned-rule generation are
+  mapping, per-application exclusions/overrides, and owned-rule generation are
   implemented. The external engine is never installed automatically.
 
 ## Install from GitHub
@@ -66,6 +66,10 @@ and click **Apply**. An unknown Hyprland/HyprWindowShade fingerprint is safely
 suspended until it is validated or you explicitly choose **Test anyway**.
 OmaDecor only rewrites `~/.config/hypr/omadecor.lua`; it does not touch manual
 HyprWindowShade rules.
+
+Use **OD → Applications → FX setup** to make an event inherit the global
+selection, disable it for that application, or select another compatible
+effect. **Disable all FX** takes precedence over those event overrides.
 
 ## Local Development
 

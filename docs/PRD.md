@@ -1514,7 +1514,7 @@ omadecor.lua generation
 Apply workflow
 ```
 
-Décision M5 : le catalogue embarqué fournit un fade open/close, un pulse focus et un wobble de mouvement, tous identifiés comme OmaDecor. `EffectsManager` génère atomiquement `~/.config/hypr/omadecor.lua` avec des règles exclusivement préfixées `omadecor-effects-*`, puis recharge Hyprland uniquement sur Apply. Les exclusions applicatives utilisent des tags spécifiques pass-through qui gagnent sur les fallbacks globaux.
+Décision M5 : le catalogue embarqué fournit un fade open/close, un pulse focus et un wobble de mouvement, tous identifiés comme OmaDecor. `EffectsManager` génère atomiquement `~/.config/hypr/omadecor.lua` avec des règles exclusivement préfixées `omadecor-effects-*`, puis recharge Hyprland uniquement sur Apply. Les overrides applicatifs utilisent des tags spécifiques qui gagnent sur les fallbacks globaux ; `None` utilise un shader pass-through et l’exclusion complète gagne sur tous les overrides conservés.
 
 Tester au minimum :
 
@@ -1545,6 +1545,8 @@ diagnostics
 ```
 
 Simuler artificiellement un changement de version pour vérifier le comportement.
+
+Décision M6 : la matrice sépare la validation globale du fingerprint et les états `OK`, `UNTESTED`, `DEGRADED` ou `BROKEN` par couple effet/événement. Un effet `BROKEN` reste sélectionné dans l’état utilisateur mais est remplacé par `None` uniquement dans les règles effectives. Les transitions de compatibilité importantes émettent une notification une fois par changement observé pendant la session.
 
 ---
 

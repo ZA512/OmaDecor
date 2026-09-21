@@ -36,6 +36,42 @@ Scope {
         return shaderCatalog.compatible(eventName)
     }
 
+    function effectStatus(eventName, effectId) {
+        return compatibility.effectStatus(effectId, eventName)
+    }
+
+    function effectiveEvents() {
+        var result = ({})
+        if (!config) return result
+        for (var eventName in config.effectsEvents) {
+            var effectId = String(config.effectsEvents[eventName] || "none")
+            result[eventName] = root.effectStatus(eventName, effectId) === "BROKEN"
+                ? "none" : effectId
+        }
+        return result
+    }
+
+    function effectiveApplications() {
+        if (!config) return []
+        var result = []
+        for (var index = 0; index < config.applications.length; index++) {
+            var source = config.applications[index] || {}
+            var overrides = ({})
+            var sourceOverrides = source.effectOverrides || {}
+            for (var eventName in sourceOverrides) {
+                var effectId = String(sourceOverrides[eventName] || "none")
+                overrides[eventName] = root.effectStatus(eventName, effectId) === "BROKEN"
+                    ? "none" : effectId
+            }
+            result.push({
+                appClass: source.appClass,
+                disableEffects: source.disableEffects === true,
+                effectOverrides: overrides
+            })
+        }
+        return result
+    }
+
     function cycleEffect(eventName) {
         if (!config) return "unavailable"
         var choices = shaderCatalog.compatible(eventName)
@@ -69,12 +105,14 @@ Scope {
         if (!config || !config.loaded || symlinkCheck.running || mkdirProcess.running || reloadProcess.running)
             return false
         root.lastError = ""
+        root.stdoutText = ""
+        root.stderrText = ""
         root.applyState = "writing"
         root.pendingText = RuleGenerator.generate(
             root.active,
-            config.effectsEvents,
+            root.effectiveEvents(),
             shaderCatalog.pathMap(),
-            config.effectsExcludedClasses(),
+            root.effectiveApplications(),
             shaderCatalog.passthroughPath()
         )
         symlinkCheck.running = true
@@ -150,7 +188,12 @@ Scope {
                 root.applied(false)
                 return
             }
-            generatedFile.setText(root.pendingText)
+            if (String(generatedFile.text()) === root.pendingText) {
+                root.applyState = "reloading"
+                reloadProcess.running = true
+            } else {
+                generatedFile.setText(root.pendingText)
+            }
         }
     }
 

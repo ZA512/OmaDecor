@@ -143,6 +143,17 @@ Scope {
         return allowed.indexOf(effectId) !== -1 ? effectId : fallback
     }
 
+    function effectCompatible(eventName, effectId) {
+        if (effectId === "none") return true
+        if (effectId === "simple-fade-open") return eventName === "open"
+        if (effectId === "simple-fade-close") return eventName === "close"
+        if (effectId === "soft-focus-pulse")
+            return ["focus", "unfocus", "urgent"].indexOf(eventName) !== -1
+        if (effectId === "simple-wobble")
+            return ["move", "resize", "workspace", "fullscreenEnter", "fullscreenExit", "float", "tile"].indexOf(eventName) !== -1
+        return false
+    }
+
     function normalizedEffectEvents(value) {
         var incoming = root.objectValue(value, {})
         var defaults = root.defaults().effects.events
@@ -151,7 +162,22 @@ Scope {
             "fullscreenExit", "float", "tile", "focus", "unfocus", "urgent"]
         for (var index = 0; index < names.length; index++) {
             var name = names[index]
-            result[name] = root.normalizedEffectId(incoming[name], defaults[name])
+            var effectId = root.normalizedEffectId(incoming[name], defaults[name])
+            result[name] = root.effectCompatible(name, effectId) ? effectId : defaults[name]
+        }
+        return result
+    }
+
+    function normalizedEffectOverrides(value) {
+        var incoming = root.objectValue(value, {})
+        var result = ({})
+        var names = ["open", "close", "move", "resize", "workspace", "fullscreenEnter",
+            "fullscreenExit", "float", "tile", "focus", "unfocus", "urgent"]
+        for (var index = 0; index < names.length; index++) {
+            var name = names[index]
+            if (incoming[name] === undefined || incoming[name] === "global") continue
+            var effectId = root.normalizedEffectId(incoming[name], "none")
+            result[name] = root.effectCompatible(name, effectId) ? effectId : "none"
         }
         return result
     }
@@ -166,7 +192,8 @@ Scope {
             title: root.normalizedText(value.title, 256),
             disableDecorations: value.disableDecorations === true,
             disableHud: value.disableHud === true,
-            disableEffects: value.disableEffects === true
+            disableEffects: value.disableEffects === true,
+            effectOverrides: root.normalizedEffectOverrides(value.effectOverrides)
         }
     }
 
@@ -399,6 +426,7 @@ Scope {
             "fullscreenExit", "float", "tile", "focus", "unfocus", "urgent"]
         if (allowedEvents.indexOf(name) === -1) return false
         var cleanId = root.normalizedEffectId(effectId, "none")
+        if (!root.effectCompatible(name, cleanId)) return false
         var next = ({})
         for (var key in root.effectsEvents) next[key] = root.effectsEvents[key]
         next[name] = cleanId
@@ -424,6 +452,8 @@ Scope {
         var key = entry.appClass.toLowerCase()
         for (var index = 0; index < next.length; index++) {
             if (String(next[index].appClass).toLowerCase() !== key) continue
+            if (!value || value.effectOverrides === undefined)
+                entry.effectOverrides = next[index].effectOverrides || ({})
             next[index] = entry
             root.applications = next
             root.refreshApplicationExclusions()
@@ -476,7 +506,46 @@ Scope {
                 disableHud: incoming.disableHud !== undefined
                     ? incoming.disableHud === true : current.disableHud,
                 disableEffects: incoming.disableEffects !== undefined
-                    ? incoming.disableEffects === true : current.disableEffects
+                    ? incoming.disableEffects === true : current.disableEffects,
+                effectOverrides: current.effectOverrides
+            })
+            root.applications = next
+            root.refreshApplicationExclusions()
+            root.revision += 1
+            root.configurationChanged()
+            root.scheduleSave()
+            return true
+        }
+        return false
+    }
+
+    function setApplicationEffectOverride(appClass, eventName, effectId) {
+        var classKey = String(appClass || "").trim().toLowerCase()
+        var eventKey = String(eventName || "")
+        var allowedEvents = ["open", "close", "move", "resize", "workspace", "fullscreenEnter",
+            "fullscreenExit", "float", "tile", "focus", "unfocus", "urgent"]
+        if (classKey === "" || allowedEvents.indexOf(eventKey) === -1) return false
+
+        var requested = String(effectId || "global")
+        var cleanId = requested === "global" ? "global" : root.normalizedEffectId(requested, "none")
+        if (cleanId !== "global" && !root.effectCompatible(eventKey, cleanId)) return false
+        var next = root.applications.slice()
+        for (var index = 0; index < next.length; index++) {
+            var current = next[index]
+            if (String(current.appClass).toLowerCase() !== classKey) continue
+            var overrides = ({})
+            var currentOverrides = root.objectValue(current.effectOverrides, {})
+            for (var key in currentOverrides) overrides[key] = currentOverrides[key]
+            if (cleanId === "global") delete overrides[eventKey]
+            else overrides[eventKey] = cleanId
+            next[index] = root.normalizedApplication({
+                appClass: current.appClass,
+                name: current.name,
+                title: current.title,
+                disableDecorations: current.disableDecorations,
+                disableHud: current.disableHud,
+                disableEffects: current.disableEffects,
+                effectOverrides: overrides
             })
             root.applications = next
             root.refreshApplicationExclusions()

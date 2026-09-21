@@ -17,6 +17,7 @@ Item {
     property string currentPage: "overview"
     property bool draftDirty: false
     property string actionMessage: ""
+    property string selectedApplicationClass: ""
     readonly property string effectsInstallCommands: "hyprpm add https://github.com/ManofJELLO/HyprWindowShade\n"
         + "hyprpm enable HyprWindowShade\n"
         + "hyprpm reload"
@@ -57,9 +58,14 @@ Item {
             if (payload.debug !== undefined) root.service.setDebug(payload.debug)
             root.service.recordPanelOpened(payloadJson, root.serviceIdentityMatched)
         }
-        root.currentPage = payload.page === "applications" || payload.page === "decorations"
-            || payload.page === "effects"
-            ? payload.page : "overview"
+        if (payload.page === "applicationEffects" && payload.appClass !== undefined) {
+            root.selectedApplicationClass = String(payload.appClass || "").slice(0, 128)
+            root.currentPage = root.selectedApplication() ? "applicationEffects" : "applications"
+        } else {
+            root.currentPage = payload.page === "applications" || payload.page === "decorations"
+                || payload.page === "effects" || payload.page === "diagnostics" || payload.page === "about"
+                ? payload.page : "overview"
+        }
         root.actionMessage = ""
         root.syncDraft()
         root.opened = true
@@ -115,6 +121,16 @@ Item {
         if (status === "UNTESTED")
             return "HyprWindowShade has not been validated with this exact Hyprland ABI. Effects are safely suspended."
         return "Window effects are unavailable: " + (root.service.effectsError || status)
+    }
+
+    function selectedApplication() {
+        if (!root.service) return null
+        var classKey = root.selectedApplicationClass.toLowerCase()
+        for (var index = 0; index < root.service.applications.length; index++) {
+            var entry = root.service.applications[index]
+            if (String(entry.appClass).toLowerCase() === classKey) return entry
+        }
+        return null
     }
 
     component ActionButton: Rectangle {
@@ -262,6 +278,8 @@ Item {
         required property string title
         readonly property string effectId: root.service
             ? String(root.service.effectsEvents[eventName] || "none") : "none"
+        readonly property string compatibilityState: root.service
+            ? root.service.effectCompatibilityState(eventName, effectId) : "UNTESTED"
 
         width: effectsGrid.width > 0 ? (effectsGrid.width - 8) / 2 : 0
         height: 42
@@ -283,10 +301,54 @@ Item {
             anchors.right: parent.right
             anchors.rightMargin: 6
             anchors.verticalCenter: parent.verticalCenter
-            label: root.service ? root.service.effectDisplayName(effectRow.effectId) : "None"
+            label: (effectRow.compatibilityState === "BROKEN" ? "✕ "
+                : (effectRow.compatibilityState === "DEGRADED" ? "⚠ " : ""))
+                + (root.service ? root.service.effectDisplayName(effectRow.effectId) : "None")
             buttonWidth: 118
             selected: effectRow.effectId !== "none"
             onClicked: if (root.service) root.actionMessage = root.service.cycleEffect(effectRow.eventName)
+        }
+    }
+
+    component ApplicationEffectRow: Rectangle {
+        id: applicationEffectRow
+
+        required property string eventName
+        required property string title
+        readonly property string effectId: root.service
+            ? root.service.applicationEffectOverride(root.selectedApplicationClass, eventName) : "global"
+        readonly property string compatibilityState: root.service
+            ? root.service.effectCompatibilityState(eventName, effectId) : "UNTESTED"
+
+        width: applicationEffectsGrid.width > 0 ? (applicationEffectsGrid.width - 8) / 2 : 0
+        height: 42
+        radius: 7
+        color: Commons.Color.background
+        border.color: effectId === "global" ? Commons.Color.popups.border : root.accentColor
+
+        Text {
+            anchors.left: parent.left
+            anchors.leftMargin: 10
+            anchors.verticalCenter: parent.verticalCenter
+            text: applicationEffectRow.title
+            color: root.foregroundColor
+            font.pixelSize: 12
+            font.bold: true
+        }
+
+        ActionButton {
+            anchors.right: parent.right
+            anchors.rightMargin: 6
+            anchors.verticalCenter: parent.verticalCenter
+            label: applicationEffectRow.effectId === "global" ? "Global"
+                : (applicationEffectRow.compatibilityState === "BROKEN" ? "✕ "
+                    : (applicationEffectRow.compatibilityState === "DEGRADED" ? "⚠ " : ""))
+                    + (root.service ? root.service.effectDisplayName(applicationEffectRow.effectId) : "None")
+            buttonWidth: 118
+            selected: applicationEffectRow.effectId !== "global"
+            onClicked: if (root.service)
+                root.actionMessage = root.service.cycleApplicationEffect(
+                    root.selectedApplicationClass, applicationEffectRow.eventName)
         }
     }
 
@@ -311,7 +373,7 @@ Item {
         Rectangle {
             id: card
             anchors.centerIn: parent
-            width: Math.min(760, window.width - 40)
+            width: Math.min(900, window.width - 40)
             height: Math.min(760, window.height - 40)
             radius: 12
             color: root.panelColor
@@ -347,7 +409,9 @@ Item {
                             ActionButton { label: "Overview"; buttonWidth: 86; selected: root.currentPage === "overview"; onClicked: root.currentPage = "overview" }
                             ActionButton { label: "Decoration"; buttonWidth: 92; selected: root.currentPage === "decorations"; onClicked: { root.currentPage = "decorations"; root.syncDraft() } }
                             ActionButton { label: "Effects"; buttonWidth: 78; selected: root.currentPage === "effects"; onClicked: { root.currentPage = "effects"; if (root.service) root.service.refresh() } }
-                            ActionButton { label: "Applications"; buttonWidth: 98; selected: root.currentPage === "applications"; onClicked: root.currentPage = "applications" }
+                            ActionButton { label: "Applications"; buttonWidth: 98; selected: root.currentPage === "applications" || root.currentPage === "applicationEffects"; onClicked: root.currentPage = "applications" }
+                            ActionButton { label: "Diagnostics"; buttonWidth: 92; selected: root.currentPage === "diagnostics"; onClicked: { root.currentPage = "diagnostics"; if (root.service) root.service.refresh() } }
+                            ActionButton { label: "About"; buttonWidth: 66; selected: root.currentPage === "about"; onClicked: root.currentPage = "about" }
                         }
                     }
 
@@ -624,7 +688,7 @@ Item {
                                                 anchors.left: parent.left
                                                 anchors.leftMargin: 10
                                                 anchors.verticalCenter: parent.verticalCenter
-                                                width: 250
+                                                width: 190
                                                 spacing: 3
                                                 Text { text: configuredApp.modelData.name; color: root.foregroundColor; font.pixelSize: 12; font.bold: true; elide: Text.ElideRight; width: parent.width }
                                                 Text { text: configuredApp.modelData.appClass; color: root.mutedColor; font.pixelSize: 10; elide: Text.ElideRight; width: parent.width }
@@ -638,6 +702,14 @@ Item {
                                                 TogglePill { label: "Decor"; checked: configuredApp.modelData.disableDecorations === true; onToggled: root.toggleApplication(configuredApp.modelData, "disableDecorations") }
                                                 TogglePill { label: "HUD"; checked: configuredApp.modelData.disableHud === true; onToggled: root.toggleApplication(configuredApp.modelData, "disableHud") }
                                                 TogglePill { label: "FX"; checked: configuredApp.modelData.disableEffects === true; onToggled: root.toggleApplication(configuredApp.modelData, "disableEffects") }
+                                                ActionButton {
+                                                    label: "FX setup"
+                                                    buttonWidth: 76
+                                                    onClicked: {
+                                                        root.selectedApplicationClass = configuredApp.modelData.appClass
+                                                        root.currentPage = "applicationEffects"
+                                                    }
+                                                }
                                                 ActionButton { label: "Remove"; buttonWidth: 70; onClicked: if (root.service) root.service.removeApplication(configuredApp.modelData.appClass) }
                                             }
                                         }
@@ -697,6 +769,198 @@ Item {
                                         }
                                     }
                                 }
+                            }
+                        }
+
+                        Column {
+                            id: applicationEffectsPage
+                            anchors.fill: parent
+                            spacing: 10
+                            visible: root.currentPage === "applicationEffects"
+
+                            readonly property var application: root.selectedApplication()
+
+                            Row {
+                                width: parent.width
+                                spacing: 10
+                                ActionButton {
+                                    label: "← Back"
+                                    buttonWidth: 76
+                                    onClicked: root.currentPage = "applications"
+                                }
+                                Column {
+                                    width: parent.width - 86
+                                    spacing: 2
+                                    Text {
+                                        width: parent.width
+                                        text: applicationEffectsPage.application
+                                            ? applicationEffectsPage.application.name : "Application unavailable"
+                                        color: root.foregroundColor
+                                        font.pixelSize: 17
+                                        font.bold: true
+                                        elide: Text.ElideRight
+                                    }
+                                    Text {
+                                        width: parent.width
+                                        text: applicationEffectsPage.application
+                                            ? applicationEffectsPage.application.appClass : root.selectedApplicationClass
+                                        color: root.mutedColor
+                                        font.pixelSize: 11
+                                        elide: Text.ElideRight
+                                    }
+                                }
+                            }
+
+                            Text {
+                                width: parent.width
+                                text: "Global inherits the event selected on the Effects page. None disables only that event. Application exclusion always wins."
+                                color: root.mutedColor
+                                font.pixelSize: 12
+                                wrapMode: Text.Wrap
+                            }
+
+                            Grid {
+                                id: applicationEffectsGrid
+                                width: parent.width
+                                columns: 2
+                                columnSpacing: 8
+                                rowSpacing: 6
+
+                                ApplicationEffectRow { eventName: "open"; title: "Open" }
+                                ApplicationEffectRow { eventName: "close"; title: "Close" }
+                                ApplicationEffectRow { eventName: "move"; title: "Move" }
+                                ApplicationEffectRow { eventName: "resize"; title: "Resize" }
+                                ApplicationEffectRow { eventName: "workspace"; title: "Workspace" }
+                                ApplicationEffectRow { eventName: "focus"; title: "Focus" }
+                                ApplicationEffectRow { eventName: "unfocus"; title: "Unfocus" }
+                                ApplicationEffectRow { eventName: "urgent"; title: "Urgent" }
+                                ApplicationEffectRow { eventName: "float"; title: "Float" }
+                                ApplicationEffectRow { eventName: "tile"; title: "Tile" }
+                                ApplicationEffectRow { eventName: "fullscreenEnter"; title: "Fullscreen in" }
+                                ApplicationEffectRow { eventName: "fullscreenExit"; title: "Fullscreen out" }
+                            }
+
+                            Row {
+                                spacing: 8
+                                TogglePill {
+                                    label: "Disable all FX"
+                                    checked: applicationEffectsPage.application
+                                        ? applicationEffectsPage.application.disableEffects === true : false
+                                    onToggled: if (root.service && applicationEffectsPage.application)
+                                        root.toggleApplication(applicationEffectsPage.application, "disableEffects")
+                                }
+                                ActionButton {
+                                    label: "Apply effects"
+                                    buttonWidth: 110
+                                    selected: root.service ? root.service.effectsPending : false
+                                    enabled: root.service ? root.service.effectsPending : false
+                                    onClicked: if (root.service) root.actionMessage = root.service.applyEffects()
+                                }
+                            }
+
+                            Text {
+                                text: root.service && root.service.effectsPending
+                                    ? "Changes pending" : root.actionMessage
+                                color: root.service && root.service.effectsPending
+                                    ? Commons.Color.urgent : root.accentColor
+                                font.pixelSize: 11
+                            }
+                        }
+
+                        Column {
+                            anchors.fill: parent
+                            spacing: 10
+                            visible: root.currentPage === "diagnostics"
+
+                            Text { text: "Diagnostics"; color: root.foregroundColor; font.pixelSize: 18; font.bold: true }
+                            Text {
+                                width: parent.width
+                                text: "Runtime information used to diagnose ABI, plugin, configuration, and monitor issues."
+                                color: root.mutedColor
+                                font.pixelSize: 12
+                                wrapMode: Text.Wrap
+                            }
+
+                            Rectangle {
+                                width: parent.width
+                                height: diagnosticsColumn.implicitHeight + 24
+                                radius: 8
+                                color: Commons.Color.background
+                                border.color: Commons.Color.popups.border
+
+                                Column {
+                                    id: diagnosticsColumn
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    anchors.top: parent.top
+                                    anchors.margins: 12
+                                    spacing: 7
+                                    Text { text: "Hyprland: " + (root.service ? root.service.hyprlandVersion : "unavailable"); color: root.foregroundColor; font.pixelSize: 12 }
+                                    Text { width: parent.width; text: "Commit: " + (root.service ? root.service.hyprlandCommit : ""); color: root.mutedColor; font.pixelSize: 11; elide: Text.ElideMiddle }
+                                    Text { width: parent.width; text: "ABI: " + (root.service ? root.service.hyprlandAbi : ""); color: root.mutedColor; font.pixelSize: 11; elide: Text.ElideMiddle }
+                                    Text { text: "Native decoration: " + (root.service && root.service.nativeDecorationLoaded ? "loaded " + root.service.nativeDecorationVersion : "not loaded"); color: root.foregroundColor; font.pixelSize: 12 }
+                                    Text { text: "HUD: " + (root.service ? root.service.trackerState : "unavailable"); color: root.foregroundColor; font.pixelSize: 12 }
+                                    Text { text: "Effects: " + (root.service ? root.service.effectsCompatibilityStatus + " · " + root.service.effectsApplyState : "unavailable"); color: root.foregroundColor; font.pixelSize: 12 }
+                                    Text { text: "Monitors: " + (root.service ? root.service.monitorCount : 0); color: root.foregroundColor; font.pixelSize: 12 }
+                                    Text { width: parent.width; text: "Generated config: " + (root.service ? root.service.effectsGeneratedPath : ""); color: root.mutedColor; font.pixelSize: 11; elide: Text.ElideMiddle }
+                                }
+                            }
+
+                            Row {
+                                spacing: 8
+                                ActionButton {
+                                    label: "Refresh"
+                                    buttonWidth: 90
+                                    onClicked: if (root.service) root.actionMessage = root.service.refresh()
+                                }
+                                ActionButton {
+                                    label: "Copy report"
+                                    buttonWidth: 105
+                                    onClicked: if (root.service) {
+                                        Quickshell.execDetached(["/usr/bin/wl-copy", root.service.status()])
+                                        root.actionMessage = "Diagnostic report copied"
+                                    }
+                                }
+                            }
+
+                            Text { text: root.actionMessage; color: root.accentColor; font.pixelSize: 11 }
+                        }
+
+                        Column {
+                            anchors.fill: parent
+                            spacing: 12
+                            visible: root.currentPage === "about"
+
+                            Text { text: "About OmaDecor"; color: root.foregroundColor; font.pixelSize: 18; font.bold: true }
+                            Text {
+                                width: parent.width
+                                text: "Window decoration, click-through HUD, and effect configuration for Omarchy. Decorations run natively inside Hyprland; the HUD remains a Quickshell surface."
+                                color: root.mutedColor
+                                font.pixelSize: 13
+                                wrapMode: Text.Wrap
+                            }
+                            Rectangle {
+                                width: parent.width
+                                height: 112
+                                radius: 8
+                                color: Commons.Color.background
+                                border.color: Commons.Color.popups.border
+                                Column {
+                                    anchors.fill: parent
+                                    anchors.margins: 14
+                                    spacing: 7
+                                    Text { text: "Window effects powered by HyprWindowShade"; color: root.foregroundColor; font.pixelSize: 14; font.bold: true }
+                                    Text { text: "Created by ManofJELLO"; color: root.mutedColor; font.pixelSize: 12 }
+                                    Text { text: "External project · MIT License · not bundled with OmaDecor"; color: root.mutedColor; font.pixelSize: 12 }
+                                    Text { text: "https://github.com/ManofJELLO/HyprWindowShade"; color: root.accentColor; font.pixelSize: 11 }
+                                }
+                            }
+                            Text {
+                                width: parent.width
+                                text: "OmaDecor only owns its generated omadecor.lua rules and never removes manual HyprWindowShade configuration."
+                                color: root.mutedColor
+                                font.pixelSize: 12
+                                wrapMode: Text.Wrap
                             }
                         }
                     }

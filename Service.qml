@@ -35,6 +35,11 @@ Scope {
     readonly property string effectsGeneratedPath: effectsManager.generatedPath
     readonly property bool effectsEngineInstalled: effectsManager.engineDetector.installed
     readonly property bool effectsOverrideActive: effectsManager.compatibility.overrideActive
+    readonly property string hyprlandVersion: runtimeDiagnostics.hyprlandVersion
+    readonly property string hyprlandCommit: runtimeDiagnostics.hyprlandCommit
+    readonly property string hyprlandAbi: runtimeDiagnostics.hyprlandAbi
+    readonly property string nativeDecorationVersion: runtimeDiagnostics.nativeDecorationVersion
+    readonly property int monitorCount: runtimeDiagnostics.monitors.length
     readonly property bool nativeDecorationLoaded: runtimeDiagnostics.nativeDecorationLoaded
     readonly property bool effectsEngineLoaded: runtimeDiagnostics.effectsEngineLoaded
     readonly property string effectsEngineVersion: runtimeDiagnostics.effectsEngineVersion
@@ -118,6 +123,10 @@ Scope {
         return effectsManager.displayName(effectId)
     }
 
+    function effectCompatibilityState(eventName, effectId) {
+        return effectsManager.effectStatus(eventName, effectId)
+    }
+
     function applyEffects() {
         return effectsManager.applyConfiguration() ? "applying" : "busy"
     }
@@ -128,6 +137,36 @@ Scope {
 
     function clearEffectsOverride() {
         return effectsManager.clearOverride()
+    }
+
+    function applicationEffectOverride(appClass, eventName) {
+        var classKey = String(appClass || "").toLowerCase()
+        var eventKey = String(eventName || "")
+        for (var index = 0; index < configStore.applications.length; index++) {
+            var entry = configStore.applications[index]
+            if (String(entry.appClass).toLowerCase() !== classKey) continue
+            var overrides = entry.effectOverrides || {}
+            return overrides[eventKey] === undefined ? "global" : String(overrides[eventKey])
+        }
+        return "global"
+    }
+
+    function cycleApplicationEffect(appClass, eventName) {
+        var compatible = effectsManager.compatibleEffects(eventName)
+        var choices = [{ id: "global", name: "Global" }]
+        for (var index = 0; index < compatible.length; index++) choices.push(compatible[index])
+        var current = root.applicationEffectOverride(appClass, eventName)
+        var currentIndex = -1
+        for (var choiceIndex = 0; choiceIndex < choices.length; choiceIndex++)
+            if (choices[choiceIndex].id === current) currentIndex = choiceIndex
+        var next = choices[(currentIndex + 1) % choices.length]
+        return configStore.setApplicationEffectOverride(appClass, eventName, next.id)
+            ? next.id : "invalid"
+    }
+
+    function setApplicationEffectOverride(appClass, eventName, effectId) {
+        return configStore.setApplicationEffectOverride(appClass, eventName, effectId)
+            ? "ok" : "invalid"
     }
 
     function addApplication(value) {
@@ -254,7 +293,8 @@ Scope {
             panel: {
                 opens: root.panelOpenCount,
                 closes: root.panelCloseCount,
-                serviceIdentityMatched: root.panelServiceIdentityMatched
+                serviceIdentityMatched: root.panelServiceIdentityMatched,
+                lastPayload: root.lastPanelPayload
             },
             source: hyprlandState.diagnostics(),
             surfaces: hudHost.surfaceCount > 0 ? [{
@@ -336,6 +376,10 @@ Scope {
 
         function setApplicationExclusions(appClass: string, valueJson: string): string {
             return root.setApplicationExclusionsJson(appClass, valueJson)
+        }
+
+        function setApplicationEffectOverride(appClass: string, eventName: string, effectId: string): string {
+            return root.setApplicationEffectOverride(appClass, eventName, effectId)
         }
 
         function reloadConfig(): string {
@@ -420,6 +464,19 @@ Scope {
 
         function onRefreshed() {
             nativeBridge.applyConfiguration()
+        }
+    }
+
+    Connections {
+        target: effectsManager.compatibility
+
+        function onNotificationRequested(title, body) {
+            Quickshell.execDetached([
+                "/usr/share/omarchy/bin/omarchy-notification-send",
+                "--app-name", "OmaDecor",
+                title,
+                body
+            ])
         }
     }
 
