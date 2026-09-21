@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "id": "raised-edge",
+  "name": "Raised Edge",
+  "description": "Thin light top/right edges with thicker derived-dark bottom/left edges.",
+  "renderer": "native:omadecor-native",
+  "settings": {
+    "useThemeAccent": {
+      "type": "boolean",
+      "default": true
+    },
+    "lightWidth": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 20,
+      "default": 2
+    },
+    "darkWidth": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 20,
+      "default": 5
+    },
+    "shadeFactor": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "default": 0.45
+    },
+    "inactiveOpacity": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "default": 0.55
+    },
+    "activeColor": {
+      "type": "color",
+      "default": "#47d7ff"
+    },
+    "inactiveColor": {
+      "type": "color",
+      "default": "#64748b"
+    }
+  }
+}

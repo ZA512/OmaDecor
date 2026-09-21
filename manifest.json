@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "omadecor",
+  "name": "OmaDecor",
+  "version": "0.1.0",
+  "author": "Matthieu",
+  "description": "Native Hyprland window decorations with a Quickshell HUD and settings panel.",
+  "kinds": [
+    "service",
+    "panel"
+  ],
+  "entryPoints": {
+    "service": "Service.qml",
+    "panel": "Panel.qml"
+  }
+}
