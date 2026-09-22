@@ -35,6 +35,13 @@ Scope {
     readonly property string effectsGeneratedPath: effectsManager.generatedPath
     readonly property bool effectsEngineInstalled: effectsManager.engineDetector.installed
     readonly property bool effectsOverrideActive: effectsManager.compatibility.overrideActive
+    readonly property bool effectsPackInstalled: effectsManager.catalog.externalPackInstalled
+    readonly property int effectsPackPairCount: effectsManager.catalog.externalPairCount
+    readonly property string effectsPackPath: effectsManager.catalog.externalPackRoot
+    readonly property var effectsCatalog: effectsManager.catalog.effects
+    readonly property string effectsInstallerPath: localFilePath(
+        Qt.resolvedUrl("scripts/install-effects.sh")
+    )
     readonly property string hyprlandVersion: runtimeDiagnostics.hyprlandVersion
     readonly property string hyprlandCommit: runtimeDiagnostics.hyprlandCommit
     readonly property string hyprlandAbi: runtimeDiagnostics.hyprlandAbi
@@ -74,6 +81,16 @@ Scope {
     function boolValue(value) {
         var text = String(value).toLowerCase()
         return value === true || text === "true" || text === "1" || text === "on"
+    }
+
+    function localFilePath(value) {
+        var text = String(value || "")
+        if (text.indexOf("file://") === 0) text = text.slice(7)
+        try {
+            return decodeURIComponent(text)
+        } catch (error) {
+            return text
+        }
     }
 
     function moduleEnabled(moduleName) {
@@ -212,7 +229,20 @@ Scope {
     }
 
     function setEffectEvent(eventName, effectId) {
+        if (!effectsManager.catalog.isCompatible(eventName, effectId)) return "invalid"
         return configStore.setEffectEvent(eventName, effectId) ? "ok" : "invalid"
+    }
+
+    function compatibleEffects(eventName) {
+        return effectsManager.compatibleEffects(eventName)
+    }
+
+    function installEffects() {
+        Quickshell.execDetached([
+            "/usr/bin/omarchy", "launch", "terminal",
+            "/usr/bin/bash", root.effectsInstallerPath
+        ])
+        return "installer-opened"
     }
 
     function cycleEffect(eventName) {
@@ -265,6 +295,8 @@ Scope {
     }
 
     function setApplicationEffectOverride(appClass, eventName, effectId) {
+        if (String(effectId || "global") !== "global"
+                && !effectsManager.catalog.isCompatible(eventName, effectId)) return "invalid"
         return configStore.setApplicationEffectOverride(appClass, eventName, effectId)
             ? "ok" : "invalid"
     }
@@ -356,6 +388,9 @@ Scope {
                     enabled: root.effectsEnabled,
                     engineInstalled: effectsManager.engineDetector.installed,
                     engineLoaded: runtimeDiagnostics.effectsEngineLoaded,
+                    packInstalled: effectsManager.catalog.externalPackInstalled,
+                    packPairs: effectsManager.catalog.externalPairCount,
+                    packPath: effectsManager.catalog.externalPackRoot,
                     engineName: runtimeDiagnostics.effectsEngineName,
                     engineVersion: runtimeDiagnostics.effectsEngineVersion,
                     engineAuthor: runtimeDiagnostics.effectsEngineAuthor,
@@ -467,6 +502,10 @@ Scope {
             return root.setEffectEvent(eventName, effectId)
         }
 
+        function installEffects(): string {
+            return root.installEffects()
+        }
+
         function applyEffects(): string {
             return root.applyEffects()
         }
@@ -575,6 +614,7 @@ Scope {
 
         function onConfigurationLoaded() {
             nativeBridge.applyConfiguration()
+            effectsManager.restoreConfiguration()
         }
 
         function onConfigurationChanged() {

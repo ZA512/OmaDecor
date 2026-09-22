@@ -47,25 +47,29 @@ omarchy restart shell
 
 ### Optional window effects
 
-Install the external engine in an interactive terminal:
+Open **OD → Effects** and click **Install / update**. OmaDecor opens an
+interactive terminal that explains and installs:
+
+- HyprWindowShade through `hyprpm`;
+- the separately maintained Hyprland-Shader pack under
+  `~/.local/share/omadecor/shader-packs/`.
+
+The equivalent repository command is:
 
 ```bash
-hyprpm add https://github.com/ManofJELLO/HyprWindowShade
-hyprpm enable HyprWindowShade
-hyprpm reload
+bash scripts/install-effects.sh
 ```
 
-Then add this line once near the end of `~/.config/hypr/hyprland.lua`:
+After installation, click **Check again**, then click an event to open the
+effect picker. The external pack contributes 55 open/close pairs such as Fire,
+Smoke, Dissolve, Matrix, Plasma, and Voronoi Shatter. Click **Apply** after
+choosing. An unknown Hyprland/HyprWindowShade fingerprint is safely suspended
+until it is validated or you explicitly choose **Test anyway**. OmaDecor only
+rewrites and evaluates `~/.config/hypr/omadecor.lua`; it does not touch the
+main Hyprland configuration or manual HyprWindowShade rules.
 
-```lua
-require("hypr.omadecor")
-```
-
-Open **OD → Effects**, click **Check again**, choose an effect for each event,
-and click **Apply**. An unknown Hyprland/HyprWindowShade fingerprint is safely
-suspended until it is validated or you explicitly choose **Test anyway**.
-OmaDecor only rewrites `~/.config/hypr/omadecor.lua`; it does not touch manual
-HyprWindowShade rules.
+The shader pack is not redistributed by OmaDecor and contains mixed upstream
+attributions; its own `LICENSE` remains authoritative.
 
 Use **OD → Applications → FX setup** to make an event inherit the global
 selection, disable it for that application, or select another compatible

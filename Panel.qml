@@ -18,9 +18,8 @@ Item {
     property bool draftDirty: false
     property string actionMessage: ""
     property string selectedApplicationClass: ""
-    readonly property string effectsInstallCommands: "hyprpm add https://github.com/ManofJELLO/HyprWindowShade\n"
-        + "hyprpm enable HyprWindowShade\n"
-        + "hyprpm reload"
+    property string effectPickerEvent: ""
+    property string effectPickerApplicationClass: ""
 
     readonly property color panelColor: Commons.Color.popups.background
     readonly property color foregroundColor: Commons.Color.popups.text
@@ -112,6 +111,54 @@ Item {
         return null
     }
 
+    function effectEventTitle(eventName) {
+        var titles = {
+            open: "Open", close: "Close", move: "Move", resize: "Resize",
+            workspace: "Workspace", focus: "Focus", unfocus: "Unfocus",
+            urgent: "Urgent", float: "Float", tile: "Tile",
+            fullscreenEnter: "Fullscreen in", fullscreenExit: "Fullscreen out"
+        }
+        return titles[eventName] || eventName
+    }
+
+    function openEffectPicker(eventName, appClass) {
+        root.effectPickerEvent = String(eventName || "")
+        root.effectPickerApplicationClass = String(appClass || "")
+    }
+
+    function closeEffectPicker() {
+        root.effectPickerEvent = ""
+        root.effectPickerApplicationClass = ""
+    }
+
+    function effectPickerChoices() {
+        if (!root.service || root.effectPickerEvent === "") return []
+        var result = root.service.compatibleEffects(root.effectPickerEvent).slice()
+        if (root.effectPickerApplicationClass !== "") result.unshift({
+            id: "global", name: "Global", source: "OmaDecor",
+            pack: "Application override", description: "Use the global event selection."
+        })
+        return result
+    }
+
+    function currentPickerEffect() {
+        if (!root.service || root.effectPickerEvent === "") return "none"
+        if (root.effectPickerApplicationClass !== "")
+            return root.service.applicationEffectOverride(
+                root.effectPickerApplicationClass, root.effectPickerEvent)
+        return String(root.service.effectsEvents[root.effectPickerEvent] || "none")
+    }
+
+    function chooseEffect(effectId) {
+        if (!root.service) return
+        var result = root.effectPickerApplicationClass === ""
+            ? root.service.setEffectEvent(root.effectPickerEvent, effectId)
+            : root.service.setApplicationEffectOverride(
+                root.effectPickerApplicationClass, root.effectPickerEvent, effectId)
+        root.actionMessage = result === "ok" ? "Effect selected — click Apply" : result
+        root.closeEffectPicker()
+    }
+
     component ActionButton: Rectangle {
         id: actionButton
 
@@ -129,10 +176,13 @@ Item {
 
         Text {
             anchors.centerIn: parent
+            width: parent.width - 12
+            horizontalAlignment: Text.AlignHCenter
             text: actionButton.label
             color: actionButton.selected ? Commons.Color.background : root.foregroundColor
             font.pixelSize: 12
             font.bold: actionButton.selected
+            elide: Text.ElideRight
         }
 
         MouseArea {
@@ -420,7 +470,7 @@ Item {
                 + (root.service ? root.service.effectDisplayName(effectRow.effectId) : "None")
             buttonWidth: 118
             selected: effectRow.effectId !== "none"
-            onClicked: if (root.service) root.actionMessage = root.service.cycleEffect(effectRow.eventName)
+            onClicked: root.openEffectPicker(effectRow.eventName, "")
         }
     }
 
@@ -460,9 +510,8 @@ Item {
                     + (root.service ? root.service.effectDisplayName(applicationEffectRow.effectId) : "None")
             buttonWidth: 118
             selected: applicationEffectRow.effectId !== "global"
-            onClicked: if (root.service)
-                root.actionMessage = root.service.cycleApplicationEffect(
-                    root.selectedApplicationClass, applicationEffectRow.eventName)
+            onClicked: root.openEffectPicker(
+                applicationEffectRow.eventName, root.selectedApplicationClass)
         }
     }
 
@@ -619,7 +668,8 @@ Item {
                                 radius: 7
                                 color: Commons.Color.background
                                 border.color: Commons.Color.popups.border
-                                visible: root.service && !root.service.effectsEngineLoaded
+                                visible: root.service && (!root.service.effectsEngineLoaded
+                                    || !root.service.effectsPackInstalled)
 
                                 Column {
                                     id: installColumn
@@ -629,7 +679,29 @@ Item {
                                     anchors.margins: 8
                                     spacing: 5
                                     Text { text: "Window effects powered by HyprWindowShade · ManofJELLO · external MIT project"; color: root.mutedColor; font.pixelSize: 11 }
-                                    Text { text: root.effectsInstallCommands; color: root.foregroundColor; font.pixelSize: 11; font.family: "monospace" }
+                                    Text {
+                                        text: !root.service ? ""
+                                            : "Engine: " + (root.service.effectsEngineLoaded ? "loaded" : "missing")
+                                                + " · External pack: " + (root.service.effectsPackInstalled
+                                                    ? root.service.effectsPackPairCount + " pairs" : "missing")
+                                        color: root.foregroundColor
+                                        font.pixelSize: 11
+                                    }
+                                    Row {
+                                        spacing: 8
+                                        ActionButton {
+                                            label: "Install / load"
+                                            buttonWidth: 125
+                                            onClicked: if (root.service)
+                                                root.actionMessage = root.service.installEffects()
+                                        }
+                                        Text {
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            text: "Opens an interactive terminal; external projects stay separate."
+                                            color: root.mutedColor
+                                            font.pixelSize: 10
+                                        }
+                                    }
                                 }
                             }
 
@@ -656,15 +728,6 @@ Item {
 
                             Row {
                                 spacing: 8
-                                ActionButton {
-                                    label: "Copy install"
-                                    buttonWidth: 105
-                                    visible: root.service && !root.service.effectsEngineLoaded
-                                    onClicked: {
-                                        Quickshell.execDetached(["/usr/bin/wl-copy", root.effectsInstallCommands])
-                                        root.actionMessage = "Installation commands copied"
-                                    }
-                                }
                                 ActionButton {
                                     label: "Check again"
                                     buttonWidth: 105
@@ -1154,7 +1217,7 @@ Item {
                             }
                             Rectangle {
                                 width: parent.width
-                                height: 112
+                                height: 154
                                 radius: 8
                                 color: Commons.Color.background
                                 border.color: Commons.Color.popups.border
@@ -1166,6 +1229,8 @@ Item {
                                     Text { text: "Created by ManofJELLO"; color: root.mutedColor; font.pixelSize: 12 }
                                     Text { text: "External project · MIT License · not bundled with OmaDecor"; color: root.mutedColor; font.pixelSize: 12 }
                                     Text { text: "https://github.com/ManofJELLO/HyprWindowShade"; color: root.accentColor; font.pixelSize: 11 }
+                                    Text { text: "Optional shader pack: jbuck95/Hyprland-Shader · external mixed attributions"; color: root.mutedColor; font.pixelSize: 11 }
+                                    Text { text: "https://github.com/jbuck95/Hyprland-Shader"; color: root.accentColor; font.pixelSize: 11 }
                                 }
                             }
                             Text {
@@ -1174,6 +1239,143 @@ Item {
                                 color: root.mutedColor
                                 font.pixelSize: 12
                                 wrapMode: Text.Wrap
+                            }
+                        }
+
+                        Rectangle {
+                            anchors.fill: parent
+                            visible: root.effectPickerEvent !== ""
+                            color: Qt.rgba(0, 0, 0, 0.58)
+                            z: 100
+
+                            MouseArea {
+                                anchors.fill: parent
+                                onClicked: root.closeEffectPicker()
+                            }
+
+                            Rectangle {
+                                id: effectPickerCard
+                                anchors.centerIn: parent
+                                width: Math.min(560, parent.width - 30)
+                                height: Math.min(610, parent.height - 24)
+                                radius: 10
+                                color: root.panelColor
+                                border.color: Commons.Color.popups.border
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    onClicked: function(mouse) { mouse.accepted = true }
+                                }
+
+                                Column {
+                                    anchors.fill: parent
+                                    anchors.margins: 14
+                                    spacing: 9
+
+                                    Row {
+                                        width: parent.width
+                                        spacing: 8
+                                        Column {
+                                            width: parent.width - closeEffectPickerButton.width - 8
+                                            spacing: 2
+                                            Text {
+                                                text: "Choose effect · "
+                                                    + root.effectEventTitle(root.effectPickerEvent)
+                                                color: root.foregroundColor
+                                                font.pixelSize: 17
+                                                font.bold: true
+                                            }
+                                            Text {
+                                                text: root.effectPickerChoices().length + " compatible choice(s)"
+                                                color: root.mutedColor
+                                                font.pixelSize: 11
+                                            }
+                                        }
+                                        ActionButton {
+                                            id: closeEffectPickerButton
+                                            label: "Close"
+                                            buttonWidth: 70
+                                            onClicked: root.closeEffectPicker()
+                                        }
+                                    }
+
+                                    Flickable {
+                                        id: effectPickerList
+                                        width: parent.width
+                                        height: parent.height - 58
+                                        contentWidth: width
+                                        contentHeight: effectPickerColumn.height
+                                        clip: true
+
+                                        Column {
+                                            id: effectPickerColumn
+                                            width: effectPickerList.width
+                                            spacing: 5
+
+                                            Repeater {
+                                                model: root.effectPickerChoices()
+                                                delegate: Rectangle {
+                                                    id: effectChoice
+                                                    required property var modelData
+                                                    readonly property bool selected:
+                                                        modelData.id === root.currentPickerEffect()
+
+                                                    width: effectPickerColumn.width
+                                                    height: 54
+                                                    radius: 7
+                                                    color: selected
+                                                        ? Commons.Util.alpha(root.accentColor, 0.22)
+                                                        : Commons.Color.background
+                                                    border.color: selected
+                                                        ? root.accentColor : Commons.Color.popups.border
+
+                                                    Column {
+                                                        anchors.left: parent.left
+                                                        anchors.leftMargin: 10
+                                                        anchors.right: choiceState.left
+                                                        anchors.rightMargin: 8
+                                                        anchors.verticalCenter: parent.verticalCenter
+                                                        spacing: 3
+                                                        Text {
+                                                            width: parent.width
+                                                            text: effectChoice.modelData.name
+                                                            color: root.foregroundColor
+                                                            font.pixelSize: 12
+                                                            font.bold: true
+                                                            elide: Text.ElideRight
+                                                        }
+                                                        Text {
+                                                            width: parent.width
+                                                            text: String(effectChoice.modelData.pack || effectChoice.modelData.source || "")
+                                                                + (effectChoice.modelData.description
+                                                                    ? " · " + effectChoice.modelData.description : "")
+                                                            color: root.mutedColor
+                                                            font.pixelSize: 10
+                                                            elide: Text.ElideRight
+                                                        }
+                                                    }
+
+                                                    Text {
+                                                        id: choiceState
+                                                        anchors.right: parent.right
+                                                        anchors.rightMargin: 10
+                                                        anchors.verticalCenter: parent.verticalCenter
+                                                        text: effectChoice.selected ? "SELECTED" : "CHOOSE"
+                                                        color: effectChoice.selected
+                                                            ? root.accentColor : root.mutedColor
+                                                        font.pixelSize: 10
+                                                        font.bold: true
+                                                    }
+
+                                                    MouseArea {
+                                                        anchors.fill: parent
+                                                        onClicked: root.chooseEffect(effectChoice.modelData.id)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }

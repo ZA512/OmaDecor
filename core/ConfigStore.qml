@@ -174,19 +174,14 @@ Scope {
 
     function normalizedEffectId(value, fallback) {
         var effectId = String(value || "")
-        var allowed = ["none", "simple-fade-open", "simple-fade-close", "soft-focus-pulse", "simple-wobble"]
-        return allowed.indexOf(effectId) !== -1 ? effectId : fallback
+        return /^[a-z0-9][a-z0-9._-]{0,127}$/.test(effectId) ? effectId : fallback
     }
 
     function effectCompatible(eventName, effectId) {
-        if (effectId === "none") return true
-        if (effectId === "simple-fade-open") return eventName === "open"
-        if (effectId === "simple-fade-close") return eventName === "close"
-        if (effectId === "soft-focus-pulse")
-            return ["focus", "unfocus", "urgent"].indexOf(eventName) !== -1
-        if (effectId === "simple-wobble")
-            return ["move", "resize", "workspace", "fullscreenEnter", "fullscreenExit", "float", "tile"].indexOf(eventName) !== -1
-        return false
+        var allowedEvents = ["open", "close", "move", "resize", "workspace", "fullscreenEnter",
+            "fullscreenExit", "float", "tile", "focus", "unfocus", "urgent"]
+        return allowedEvents.indexOf(String(eventName || "")) !== -1
+            && root.normalizedEffectId(effectId, "") !== ""
     }
 
     function normalizedEffectEvents(value) {

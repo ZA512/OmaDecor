@@ -472,7 +472,10 @@ Network
 
 Dans le MVP, ces métriques peuvent être **globales au système**.
 
-Les métriques par processus/application sont hors scope du MVP.
+Les métriques par processus/application sont hors scope du MVP. Après le MVP,
+elles doivent remplacer les valeurs globales dans le HUD lié à la fenêtre :
+agréger le processus de l'application active et ses descendants, avec repli
+explicite vers « indisponible » plutôt que vers une valeur système ambiguë.
 
 ---
 
@@ -1506,7 +1509,9 @@ installation guidance
 safe suspension
 ```
 
-Aucun téléchargement automatique.
+Aucun téléchargement silencieux ou automatique. Une action explicite du GUI
+peut ouvrir un installateur interactif en terminal, en laissant `hyprpm`
+afficher ses vérifications et éventuels prompts.
 
 Décision M4 : `EngineDetector` inspecte passivement l’état hyprpm et les plugins chargés. `CompatibilityManager` construit un fingerprint avec la version, le commit et l’ABI Hyprland ainsi que les métadonnées HyprWindowShade réellement disponibles. Une combinaison inconnue est `UNTESTED`, suspendue par défaut, et l’override utilisateur est lié au fingerprint exact.
 
@@ -1526,7 +1531,7 @@ omadecor.lua generation
 Apply workflow
 ```
 
-Décision M5 : le catalogue embarqué fournit un fade open/close, un pulse focus et un wobble de mouvement, tous identifiés comme OmaDecor. `EffectsManager` génère atomiquement `~/.config/hypr/omadecor.lua` avec des règles exclusivement préfixées `omadecor-effects-*`, puis recharge Hyprland uniquement sur Apply. Les overrides applicatifs utilisent des tags spécifiques qui gagnent sur les fallbacks globaux ; `None` utilise un shader pass-through et l’exclusion complète gagne sur tous les overrides conservés.
+Décision M5 : le catalogue embarqué fournit un fade open/close, un pulse focus et un wobble de mouvement, tous identifiés comme OmaDecor. Un pack externe installé séparément est découvert depuis le répertoire de données utilisateur et ses paires `_open`/`_close` alimentent un sélecteur filtré par événement. `EffectsManager` génère atomiquement `~/.config/hypr/omadecor.lua` avec des règles exclusivement préfixées `omadecor-effects-*`, recharge Hyprland puis évalue ce fichier uniquement sur Apply ou lors de la restauration d'une configuration active. Les overrides applicatifs utilisent des tags spécifiques qui gagnent sur les fallbacks globaux ; `None` utilise un shader pass-through et l’exclusion complète gagne sur tous les overrides conservés.
 
 Tester au minimum :
 

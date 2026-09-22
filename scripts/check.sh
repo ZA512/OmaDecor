@@ -50,6 +50,8 @@ jq -e '
 jq -e '.schemaVersion == 1 and (.validated | type == "array") and (.effects | type == "array")' \
   compatibility/hyprwindowshade.json >/dev/null
 
+bash -n scripts/install-effects.sh
+
 if command -v node >/dev/null 2>&1; then
   node scripts/validate-theme.js decorations/styles/raised-edge.omadecor.json
   node scripts/validate-theme.js tests/fixtures/edge-rect.omadecor.json

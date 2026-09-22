@@ -16,14 +16,14 @@ const generated = context.generate(
     true,
     {
         open: "simple-fade-open",
-        close: "simple-fade-close",
+        close: "hyprland-shader.fire.close",
         move: "simple-wobble",
         resize: "none"
     },
     {
         "simple-fade-open": "/plugins/omadecor/effects/shaders/simple-fade-open.glsl",
-        "simple-fade-close": "/plugins/omadecor/effects/shaders/simple-fade-close.glsl",
-        "simple-wobble": "/plugins/omadecor/effects/shaders/simple-wobble.glsl"
+        "simple-wobble": "/plugins/omadecor/effects/shaders/simple-wobble.glsl",
+        "hyprland-shader.fire.close": "/home/user/.local/share/omadecor/shader-packs/hyprland-shader/shaders/fire_close.glsl"
     },
     [
         { appClass: "kitty", disableEffects: true, effectOverrides: { open: "simple-fade-open" } },
@@ -43,6 +43,7 @@ assert.match(generated, /\+shader_move_default:[^\n]+@0\.35/)
 assert.match(generated, /omadecor-effects-exclude-kitty-open/)
 assert.match(generated, /omadecor-effects-override-org-gnome-calculator-open/)
 assert.match(generated, /omadecor-effects-override-org-gnome-calculator-move/)
+assert.match(generated, /fire_close\.glsl/)
 assert.equal(context.exactClass("org.gnome.Calculator"), "^(org\\.gnome\\.Calculator)$")
 assert.match(generated, /\+shader_close:[^\n]+passthrough\.glsl/)
 assert.doesNotMatch(generated, /omadecor-effects-override-kitty/)

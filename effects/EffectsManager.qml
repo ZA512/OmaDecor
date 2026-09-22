@@ -15,6 +15,8 @@ Scope {
     property string pendingText: ""
     property string stdoutText: ""
     property string stderrText: ""
+    property bool restoreRequested: false
+    property bool engineReloadAttempted: false
 
     readonly property string configHome: Quickshell.env("XDG_CONFIG_HOME")
         || (Quickshell.env("HOME") + "/.config")
@@ -102,7 +104,8 @@ Scope {
     }
 
     function applyConfiguration() {
-        if (!config || !config.loaded || symlinkCheck.running || mkdirProcess.running || reloadProcess.running)
+        if (!config || !config.loaded || symlinkCheck.running || mkdirProcess.running
+                || reloadProcess.running || evalProcess.running)
             return false
         root.lastError = ""
         root.stdoutText = ""
@@ -119,6 +122,26 @@ Scope {
         return true
     }
 
+    function ensureEngineLoaded() {
+        if (!config || !config.effectsEnabled || !engineDetector.installed
+                || engineDetector.loaded || engineReloadProcess.running
+                || root.engineReloadAttempted) return false
+        root.engineReloadAttempted = true
+        engineReloadProcess.running = true
+        return true
+    }
+
+    function restoreConfiguration() {
+        if (!config || !config.loaded || !config.effectsEnabled) return false
+        root.restoreRequested = true
+        restoreTimer.restart()
+        return true
+    }
+
+    function luaLoadExpression() {
+        return "dofile(" + RuleGenerator.luaString(root.generatedPath) + ")"
+    }
+
     function diagnostics() {
         return {
             status: root.status,
@@ -129,6 +152,9 @@ Scope {
             fingerprint: compatibility.fingerprint,
             engineInstalled: engineDetector.installed,
             engineLoaded: engineDetector.loaded,
+            packInstalled: shaderCatalog.externalPackInstalled,
+            packPairs: shaderCatalog.externalPairCount,
+            packPath: shaderCatalog.externalPackRoot,
             pending: root.pending,
             applyState: root.applyState,
             generatedPath: root.generatedPath,
@@ -153,7 +179,31 @@ Scope {
 
     Connections {
         target: root.config
-        function onConfigurationChanged() { root.pending = true }
+        function onConfigurationChanged() {
+            root.pending = true
+            if (root.config.effectsEnabled) root.ensureEngineLoaded()
+        }
+    }
+
+    Timer {
+        id: restoreTimer
+        interval: 1500
+        repeat: false
+        onTriggered: {
+            if (root.ensureEngineLoaded()) return
+            root.restoreRequested = false
+            root.applyConfiguration()
+        }
+    }
+
+    Process {
+        id: engineReloadProcess
+        command: ["/usr/bin/hyprpm", "reload", "-n"]
+        // qmllint disable signal-handler-parameters
+        onExited: function() {
+            if (root.runtime) root.runtime.refresh()
+            if (root.restoreRequested) restoreTimer.restart()
+        }
     }
 
     Process {
@@ -222,9 +272,37 @@ Scope {
         // qmllint disable signal-handler-parameters
         onExited: function(exitCode) {
             var success = exitCode === 0 && root.stdoutText.toLowerCase().indexOf("error") === -1
+            if (!success) {
+                root.lastAppliedAtMs = Date.now()
+                root.applyState = "error"
+                root.lastError = root.stderrText || root.stdoutText || "Hyprland reload failed"
+                root.applied(false)
+                return
+            }
+            root.applyState = "evaluating"
+            root.stdoutText = ""
+            root.stderrText = ""
+            evalProcess.command = ["/usr/bin/hyprctl", "eval", root.luaLoadExpression()]
+            evalProcess.running = true
+        }
+    }
+
+    Process {
+        id: evalProcess
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: root.stdoutText = String(text || "").trim()
+        }
+        stderr: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: root.stderrText = String(text || "").trim()
+        }
+        // qmllint disable signal-handler-parameters
+        onExited: function(exitCode) {
+            var success = exitCode === 0 && root.stdoutText.toLowerCase().indexOf("error") === -1
             root.lastAppliedAtMs = Date.now()
             root.applyState = success ? "applied" : "error"
-            root.lastError = success ? "" : (root.stderrText || root.stdoutText || "Hyprland reload failed")
+            root.lastError = success ? "" : (root.stderrText || root.stdoutText || "Hyprland rejected generated effect rules")
             if (success) root.pending = false
             root.applied(success)
             if (root.runtime) root.runtime.refresh()

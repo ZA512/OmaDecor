@@ -105,7 +105,14 @@ The three desired module toggles are independent. Decorations are enabled by def
 
 Application rules are normalized, deduplicated by case-insensitive class, and stored in `applications`. Decorations, HUD, and Effects exclusions are independent. Decoration exclusions are converted to exact native class matches; unsafe class strings never reach `hyprctl`. The panel lists running applications and retains the last active non-OmaDecor window for quick rule creation.
 
-Effects keep desired state separate from runtime permission. `EngineDetector` distinguishes a loaded plugin from a hyprpm state entry; `CompatibilityManager` fingerprints the Hyprland ABI and the metadata actually exposed by HyprWindowShade. Unknown fingerprints are `UNTESTED` and safely suspended unless the user records an exact-fingerprint override. `EffectsManager` atomically owns only `~/.config/hypr/omadecor.lua`; generated rules are prefixed `omadecor-effects-*`, and manual rules are untouched. Application-specific tags override global fallback tags. `None` and whole-application exclusions use a transparent pass-through shader, with exclusion taking precedence over stored per-event choices.
+Effects keep desired state separate from runtime permission. `EngineDetector` distinguishes a loaded plugin from a hyprpm state entry; `CompatibilityManager` fingerprints the Hyprland ABI and the metadata actually exposed by HyprWindowShade. Unknown fingerprints are `UNTESTED` and safely suspended unless the user records an exact-fingerprint override. `EffectsManager` atomically owns only `~/.config/hypr/omadecor.lua`; generated rules are prefixed `omadecor-effects-*`, reloaded, then evaluated explicitly, and manual rules are untouched. Application-specific tags override global fallback tags. `None` and whole-application exclusions use a transparent pass-through shader, with exclusion taking precedence over stored per-event choices.
+
+The Effects page launches an explicit interactive installer rather than a
+background download. HyprWindowShade remains managed by `hyprpm`; the external
+Hyprland-Shader checkout remains under the user data directory. `ShaderCatalog`
+watches that checkout and builds event-filtered entries from readable
+`*_open.glsl` and `*_close.glsl` files. The picker therefore scales to the
+pack's 55 pairs without cycling through choices one click at a time.
 
 ## 6. Build and Development
 
@@ -141,7 +148,7 @@ M3 local validation covers real HUD rendering, independent metrics, fullscreen s
 3. **M2 — Decorations:** functional implementation complete locally; the physical multi-monitor matrix remains an acceptance gate.
 4. **M3 — HUD:** implemented and locally validated; mouse/multi-monitor acceptance remains pending.
 5. **M4 — Effects integration:** implemented locally; passive detection, exact-fingerprint suspension, override, GUI status, and installation guidance are functional.
-6. **M5 — Effects configuration:** implemented locally for the bundled shader catalogue, global event mapping, per-application inheritance/exclusion/replacement, owned-rule generation, and explicit Apply workflow.
+6. **M5 — Effects configuration:** implemented locally for bundled and discovered external shaders, a scrollable event picker, global event mapping, per-application inheritance/exclusion/replacement, owned-rule generation, and explicit Apply workflow.
 7. **M6 — Compatibility:** fingerprint lifecycle, exact-fingerprint overrides, effect-specific degradation, safe suppression, transition notifications, and diagnostics are implemented. No HyprWindowShade combination is marked validated until the external engine is installed and the effect matrix is tested.
 8. **M6.1 — Decoration themes:** V1 Core schema, dual semantic validation, native compilation/rendering, safe fallback, watched user-theme catalogue, generated parameter controls, canonical Raised Edge theme, and regression tests are implemented.
 9. **M7 — Release:** `hyprpm` commit pins, documentation, licenses, recovery, and exact release validation.
