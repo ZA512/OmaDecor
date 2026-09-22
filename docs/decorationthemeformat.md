@@ -1,5 +1,48 @@
 # OmaDecor Decoration Theme Format — proposition V1
 
+## 0. Statut d'implémentation
+
+La proposition ci-dessous décrit le format cible. Son sous-ensemble normatif
+**V1 Core** est désormais matérialisé par :
+
+* `decorations/schema/decoration-theme-v1.schema.json` pour la structure ;
+* `decorations/ThemeCompiler.js` pour les capabilities, références, cycles,
+  limites et la compilation des valeurs ;
+* `decorations/styles/raised-edge.omadecor.json` comme thème de référence.
+
+V1 Core accepte actuellement :
+
+```text
+primitive.edge
+primitive.frame
+primitive.rect
+paint.solid
+state.focused
+color.oklch-derive
+```
+
+Les autres primitives, gradients, modifiers, états et transitions décrits dans
+ce document sont **réservés**. Un thème qui les déclare est valide dans l'idée
+du format, mais reste indisponible tant que le moteur n'annonce pas les
+capabilities correspondantes. Cette distinction évite une prise en charge
+partielle ou silencieusement incorrecte.
+
+Le chargeur runtime et le renderer générique ne sont pas encore raccordés. Le
+plugin natif continue donc de dessiner Raised Edge avec son renderer spécialisé
+pendant cette phase de migration. L'étape suivante remplacera ce chemin par le
+résultat compilé sans déplacer le dessin hors de Hyprland.
+
+Emplacements retenus pour la découverte future :
+
+```text
+decorations/styles/*.omadecor.json       thèmes intégrés
+~/.config/omadecor/themes/*.omadecor.json thèmes utilisateur
+```
+
+Un fichier utilisateur ne pourra référencer aucun chemin externe. Sa sélection
+sera enregistrée par `id`, tandis que ses paramètres resteront dans
+`~/.config/omadecor/config.json`.
+
 ## 1. Principe
 
 Un thème OmaDecor est une **recette de dessin déclarative**.

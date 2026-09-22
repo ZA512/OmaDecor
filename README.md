@@ -97,6 +97,27 @@ active, preventing a double border. OmaDecor stores user intent in
 `~/.config/omadecor/config.json`. Applying Effects atomically generates
 `~/.config/hypr/omadecor.lua`.
 
+## Decoration Theme Format
+
+OmaDecor is migrating native decorations to inert declarative files named
+`*.omadecor.json`. The V1 Core schema, semantic compiler, and canonical Raised
+Edge example are available now:
+
+```text
+decorations/schema/decoration-theme-v1.schema.json
+decorations/styles/raised-edge.omadecor.json
+docs/decorationthemeformat.md
+```
+
+Validate a theme while authoring it with:
+
+```bash
+node scripts/validate-theme.js path/to/theme.omadecor.json
+```
+
+Runtime loading of user themes is the next implementation stage; the current
+release still renders Raised Edge through the specialized native backend.
+
 ## Disable or Remove
 
 Disable Decorations before unloading the native plugin so the stock border is
@@ -109,9 +130,10 @@ hyprpm reload
 omarchy plugin disable omadecor
 ```
 
-See [docs/PRD.md](docs/PRD.md), [docs/DEVBOOK.md](docs/DEVBOOK.md), and
-[docs/TECHNICAL_SPIKE.md](docs/TECHNICAL_SPIKE.md) for behavior, architecture,
-and native-decoration evidence.
+See [docs/PRD.md](docs/PRD.md), [docs/DEVBOOK.md](docs/DEVBOOK.md),
+[docs/TECHNICAL_SPIKE.md](docs/TECHNICAL_SPIKE.md), and
+[docs/decorationthemeformat.md](docs/decorationthemeformat.md) for behavior,
+architecture, theme authoring, and native-decoration evidence.
 
 ## Credits
 

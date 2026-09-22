@@ -3,12 +3,32 @@ import QtQuick
 QtObject {
     id: root
 
+    readonly property int themeSchemaVersion: 1
+    readonly property var capabilities: [
+        "primitive.edge",
+        "primitive.frame",
+        "primitive.rect",
+        "paint.solid",
+        "state.focused",
+        "color.oklch-derive"
+    ]
+
     readonly property var styles: [
         {
-            id: "raised-edge",
+            id: "omadecor/raised-edge",
+            legacyIds: ["raised-edge"],
             name: "Raised Edge",
             description: "Thin top/right highlight with a thicker derived-dark bottom/left edge.",
             renderer: "native:omadecor-native",
+            format: "omadecor-decoration",
+            schemaVersion: 1,
+            source: "decorations/styles/raised-edge.omadecor.json",
+            requires: [
+                "primitive.frame",
+                "paint.solid",
+                "state.focused",
+                "color.oklch-derive"
+            ],
             settingsSchema: {
                 useThemeAccent: { type: "boolean", defaultValue: true },
                 lightWidth: { type: "integer", minimum: 0, maximum: 20, defaultValue: 2 },
@@ -24,7 +44,9 @@ QtObject {
     function style(styleId) {
         var requested = String(styleId || "")
         for (var index = 0; index < root.styles.length; index++) {
-            if (root.styles[index].id === requested) return root.styles[index]
+            var candidate = root.styles[index]
+            if (candidate.id === requested) return candidate
+            if (candidate.legacyIds && candidate.legacyIds.indexOf(requested) !== -1) return candidate
         }
         return null
     }
@@ -36,6 +58,11 @@ QtObject {
     function diagnostics() {
         var ids = []
         for (var index = 0; index < root.styles.length; index++) ids.push(root.styles[index].id)
-        return { styleCount: ids.length, styleIds: ids }
+        return {
+            themeSchemaVersion: root.themeSchemaVersion,
+            styleCount: ids.length,
+            styleIds: ids,
+            capabilities: root.capabilities
+        }
     }
 }

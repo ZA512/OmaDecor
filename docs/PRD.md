@@ -281,29 +281,35 @@ Ne pas imposer deux couleurs manuelles à l’utilisateur pour ce premier style.
 
 # 9. Architecture des styles de décoration
 
-Ne pas coder `Raised Edge` directement dans le moteur.
-
-Créer une abstraction native de type :
-
-```text
-DecorationStyle
-    id
-    name
-    description
-    nativeRenderer
-    settingsSchema
-```
-
-Exemple :
+Décision M6.1 : un style est une recette déclarative inerte
+`*.omadecor.json`, validée puis compilée vers le renderer natif. Raised Edge
+reste temporairement implémenté par son backend C++ spécialisé pendant le
+raccordement du renderer générique ; ce chemin n'est pas le modèle cible.
 
 ```text
-native/
-    RaisedEdgeDecoration.cpp
-    RaisedEdgeDecoration.hpp
-
-decorations/styles/
-    RaisedEdge.json
+DecorationTheme
+    metadata
+    parameters
+    palette
+    layers
+    variants
+        │
+        ▼
+ThemeCompiler
+        │
+        ▼
+CompiledDecoration
+        │
+        ▼
+Hyprland IHyprWindowDecoration
 ```
+
+Le contrat V1 Core supporte d'abord `edge`, `frame`, `rect`, `solid`, l'état
+`focused` et les dérivations OKLCH. Toute fonction supplémentaire est annoncée
+par capability et rejetée proprement si le moteur ne la fournit pas. Le format
+interdit code, commandes, shaders arbitraires, réseau et chemins d'assets.
+
+Référence normative : `docs/decorationthemeformat.md`.
 
 À terme, il doit être possible d’ajouter :
 
@@ -1170,7 +1176,13 @@ native/
     RaisedEdgeDecoration.hpp
 
 decorations/styles/
-    RaisedEdge.json
+    raised-edge.omadecor.json
+
+decorations/schema/
+    decoration-theme-v1.schema.json
+
+decorations/
+    ThemeCompiler.js
 
 hud/
     HudHost.qml

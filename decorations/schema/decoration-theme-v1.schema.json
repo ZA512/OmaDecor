@@ -1,0 +1,344 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ZA512/OmaDecor/schemas/decoration-theme-v1.schema.json",
+  "title": "OmaDecor Decoration Theme V1 Core",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "kind",
+    "id",
+    "name",
+    "version",
+    "requires",
+    "parameters",
+    "palette",
+    "layers"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "kind": { "const": "omadecor-decoration" },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,63}/[a-z0-9][a-z0-9._-]{0,63}$"
+    },
+    "name": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$"
+    },
+    "author": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 128 }
+      }
+    },
+    "license": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "description": { "type": "string", "maxLength": 512 },
+    "minEngineVersion": { "$ref": "#/$defs/version" },
+    "requires": {
+      "type": "array",
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/capability" }
+    },
+    "parameters": {
+      "type": "object",
+      "maxProperties": 64,
+      "propertyNames": { "$ref": "#/$defs/localId" },
+      "additionalProperties": { "$ref": "#/$defs/parameter" }
+    },
+    "palette": {
+      "type": "object",
+      "maxProperties": 64,
+      "propertyNames": { "$ref": "#/$defs/localId" },
+      "additionalProperties": { "$ref": "#/$defs/paletteEntry" }
+    },
+    "appearance": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "opacity": { "$ref": "#/$defs/value" }
+      }
+    },
+    "layers": {
+      "type": "array",
+      "maxItems": 128,
+      "items": { "$ref": "#/$defs/layer" }
+    },
+    "variants": {
+      "type": "array",
+      "maxItems": 32,
+      "items": { "$ref": "#/$defs/variant" }
+    },
+    "transitions": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/transition" }
+    }
+  },
+  "$defs": {
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$"
+    },
+    "capability": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*(?:\\.[a-z][a-z0-9-]*)+$"
+    },
+    "localId": {
+      "type": "string",
+      "pattern": "^[a-z][A-Za-z0-9-]{0,63}$"
+    },
+    "reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref"],
+      "properties": {
+        "ref": {
+          "type": "string",
+          "pattern": "^(system|param|palette)\\.[a-z][A-Za-z0-9-]{0,63}$"
+        }
+      }
+    },
+    "relativeValue": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "rel": { "type": "number", "minimum": -4, "maximum": 4 },
+        "px": { "type": "number", "minimum": -4096, "maximum": 4096 }
+      }
+    },
+    "value": {
+      "oneOf": [
+        { "type": "number" },
+        { "type": "boolean" },
+        { "type": "string" },
+        { "$ref": "#/$defs/reference" },
+        { "$ref": "#/$defs/relativeValue" }
+      ]
+    },
+    "parameter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "label", "default"],
+      "properties": {
+        "type": { "enum": ["number", "color", "boolean", "enum"] },
+        "label": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "unit": { "type": "string", "maxLength": 16 },
+        "default": { "$ref": "#/$defs/value" },
+        "min": { "type": "number" },
+        "max": { "type": "number" },
+        "step": { "type": "number", "exclusiveMinimum": 0 },
+        "options": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": { "type": "string", "maxLength": 64 }
+        }
+      }
+    },
+    "paletteEntry": {
+      "oneOf": [
+        { "$ref": "#/$defs/reference" },
+        {
+          "type": "string",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[0-9A-Fa-f]{2})?$"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["derive"],
+          "properties": {
+            "derive": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["from"],
+              "properties": {
+                "from": {
+                  "oneOf": [
+                    { "$ref": "#/$defs/reference" },
+                    {
+                      "type": "string",
+                      "pattern": "^#[0-9A-Fa-f]{6}(?:[0-9A-Fa-f]{2})?$"
+                    }
+                  ]
+                },
+                "space": { "const": "oklch" },
+                "lightness": { "type": "number", "minimum": -1, "maximum": 1 },
+                "chroma": { "type": "number", "minimum": -1, "maximum": 1 },
+                "hue": { "type": "number", "minimum": -360, "maximum": 360 },
+                "alpha": { "type": "number", "minimum": 0, "maximum": 1 }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "paint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "color"],
+      "properties": {
+        "type": { "const": "solid" },
+        "color": {
+          "oneOf": [
+            { "$ref": "#/$defs/reference" },
+            {
+              "type": "string",
+              "pattern": "^#[0-9A-Fa-f]{6}(?:[0-9A-Fa-f]{2})?$"
+            }
+          ]
+        }
+      }
+    },
+    "edgePart": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["thickness", "paint"],
+      "properties": {
+        "thickness": { "$ref": "#/$defs/value" },
+        "distance": { "$ref": "#/$defs/value" },
+        "paint": { "$ref": "#/$defs/paint" }
+      }
+    },
+    "layerCommon": {
+      "type": "object",
+      "required": ["id", "type"],
+      "properties": {
+        "id": { "$ref": "#/$defs/localId" },
+        "type": { "enum": ["edge", "frame", "rect"] },
+        "visible": { "type": "boolean" },
+        "opacity": { "$ref": "#/$defs/value" },
+        "clip": { "enum": ["none", "window", "rounded-window"] }
+      }
+    },
+    "edge": {
+      "allOf": [
+        { "$ref": "#/$defs/layerCommon" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "type", "side", "thickness", "paint"],
+          "properties": {
+            "id": { "$ref": "#/$defs/localId" },
+            "type": { "const": "edge" },
+            "visible": { "type": "boolean" },
+            "opacity": { "$ref": "#/$defs/value" },
+            "clip": { "enum": ["none", "window", "rounded-window"] },
+            "side": { "enum": ["top", "right", "bottom", "left"] },
+            "start": { "$ref": "#/$defs/value" },
+            "end": { "$ref": "#/$defs/value" },
+            "thickness": { "$ref": "#/$defs/value" },
+            "placement": { "enum": ["inside", "center", "outside"] },
+            "distance": { "$ref": "#/$defs/value" },
+            "paint": { "$ref": "#/$defs/paint" }
+          }
+        }
+      ]
+    },
+    "frame": {
+      "allOf": [
+        { "$ref": "#/$defs/layerCommon" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "type"],
+          "minProperties": 3,
+          "properties": {
+            "id": { "$ref": "#/$defs/localId" },
+            "type": { "const": "frame" },
+            "visible": { "type": "boolean" },
+            "opacity": { "$ref": "#/$defs/value" },
+            "clip": { "enum": ["none", "window", "rounded-window"] },
+            "top": { "$ref": "#/$defs/edgePart" },
+            "right": { "$ref": "#/$defs/edgePart" },
+            "bottom": { "$ref": "#/$defs/edgePart" },
+            "left": { "$ref": "#/$defs/edgePart" },
+            "placement": { "enum": ["inside", "center", "outside"] },
+            "join": { "enum": ["square", "miter", "bevel", "round"] }
+          }
+        }
+      ]
+    },
+    "rect": {
+      "allOf": [
+        { "$ref": "#/$defs/layerCommon" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "type", "x", "y", "width", "height", "paint"],
+          "properties": {
+            "id": { "$ref": "#/$defs/localId" },
+            "type": { "const": "rect" },
+            "visible": { "type": "boolean" },
+            "opacity": { "$ref": "#/$defs/value" },
+            "clip": { "enum": ["none", "window", "rounded-window"] },
+            "x": { "$ref": "#/$defs/value" },
+            "y": { "$ref": "#/$defs/value" },
+            "width": { "$ref": "#/$defs/value" },
+            "height": { "$ref": "#/$defs/value" },
+            "paint": { "$ref": "#/$defs/paint" }
+          }
+        }
+      ]
+    },
+    "layer": {
+      "oneOf": [
+        { "$ref": "#/$defs/edge" },
+        { "$ref": "#/$defs/frame" },
+        { "$ref": "#/$defs/rect" }
+      ]
+    },
+    "variant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["when", "patch"],
+      "properties": {
+        "when": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": false,
+          "properties": {
+            "focused": { "type": "boolean" },
+            "floating": { "type": "boolean" },
+            "tiled": { "type": "boolean" },
+            "fullscreen": { "type": "boolean" },
+            "urgent": { "type": "boolean" },
+            "pinned": { "type": "boolean" },
+            "grouped": { "type": "boolean" }
+          }
+        },
+        "patch": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "theme": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "opacity": { "$ref": "#/$defs/value" }
+              }
+            },
+            "layers": {
+              "type": "object",
+              "additionalProperties": { "type": "object" }
+            }
+          }
+        }
+      }
+    },
+    "transition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["durationMs", "easing"],
+      "properties": {
+        "durationMs": { "type": "integer", "minimum": 0, "maximum": 1000 },
+        "easing": { "enum": ["linear", "ease-in", "ease-out", "ease-in-out"] }
+      }
+    }
+  }
+}

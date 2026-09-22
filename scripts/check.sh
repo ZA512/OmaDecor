@@ -14,6 +14,7 @@ omarchy plugin validate .
   core/NativeBridge.qml \
   core/HyprlandState.qml \
   core/GeometryTracker.qml \
+  decorations/ThemeCompiler.js \
   effects/EngineDetector.qml \
   effects/ShaderCatalog.qml \
   effects/CompatibilityManager.qml \
@@ -32,16 +33,25 @@ omarchy plugin validate .
 
 jq -e '
   .schemaVersion == 1
-  and .id == "raised-edge"
-  and .renderer == "native:omadecor-native"
-  and .settings.useThemeAccent.default == true
-  and .settings.inactiveOpacity.default == 0.55
-' decorations/styles/RaisedEdge.json >/dev/null
+  and .kind == "omadecor-decoration"
+  and .id == "omadecor/raised-edge"
+  and (.requires | index("primitive.frame")) != null
+  and .parameters.inactiveOpacity.default == 0.55
+  and (.layers | length) == 1
+' decorations/styles/raised-edge.omadecor.json >/dev/null
+
+jq -e '
+  .["$schema"] == "https://json-schema.org/draft/2020-12/schema"
+  and .properties.schemaVersion.const == 1
+  and .properties.kind.const == "omadecor-decoration"
+' decorations/schema/decoration-theme-v1.schema.json >/dev/null
 
 jq -e '.schemaVersion == 1 and (.validated | type == "array") and (.effects | type == "array")' \
   compatibility/hyprwindowshade.json >/dev/null
 
 if command -v node >/dev/null 2>&1; then
+  node scripts/validate-theme.js decorations/styles/raised-edge.omadecor.json
+  node tests/decoration_theme_compiler.test.js
   node tests/effects_rule_generator.test.js
 fi
 

@@ -53,6 +53,21 @@ The decoration is sticky to all four window edges, reserved like a normal border
 
 `decorations/NativeDecorationRegistry.qml` is the style-selection boundary. Raised Edge metadata and its settings schema live outside the renderer. The current renderer remains deliberately small; future native styles must register their metadata rather than adding QML positioning surfaces.
 
+The declarative decoration format is being introduced behind that boundary.
+`docs/decorationthemeformat.md` defines the target language;
+`decorations/schema/decoration-theme-v1.schema.json` and
+`decorations/ThemeCompiler.js` define the executable V1 Core contract. The
+compiler currently accepts `edge`, `frame`, and `rect` primitives, solid paint,
+focused variants, and OKLCH color derivation. It rejects unsupported
+capabilities, cyclic references, invalid overrides, and finite-budget
+violations. The canonical Raised Edge recipe is
+`decorations/styles/raised-edge.omadecor.json`.
+
+This compiler is not yet connected to the native draw path. Until the generic
+native renderer consumes its compiled representation, the specialized Raised
+Edge C++ implementation remains the production path. Theme files must never be
+interpreted per frame.
+
 Theme mode is enabled by default. `core/ThemeBridge.qml` consumes Omarchy's existing `qs.Commons.Color` singleton, so a theme switch updates the native active color without file polling. Inactive windows use the same theme accent with configurable opacity; manual active/inactive colors remain available when theme mode is disabled.
 
 ## 4. Repository Boundaries
@@ -117,7 +132,8 @@ M3 local validation covers real HUD rendering, independent metrics, fullscreen s
 5. **M4 — Effects integration:** implemented locally; passive detection, exact-fingerprint suspension, override, GUI status, and installation guidance are functional.
 6. **M5 — Effects configuration:** implemented locally for the bundled shader catalogue, global event mapping, per-application inheritance/exclusion/replacement, owned-rule generation, and explicit Apply workflow.
 7. **M6 — Compatibility:** fingerprint lifecycle, exact-fingerprint overrides, effect-specific degradation, safe suppression, transition notifications, and diagnostics are implemented. No HyprWindowShade combination is marked validated until the external engine is installed and the effect matrix is tested.
-8. **M7 — Release:** `hyprpm` commit pins, documentation, licenses, recovery, and exact release validation.
+8. **M6.1 — Decoration themes:** V1 Core schema, semantic compiler, capability registry, canonical Raised Edge theme, and regression tests are implemented. Runtime discovery and the generic native draw backend remain pending.
+9. **M7 — Release:** `hyprpm` commit pins, documentation, licenses, recovery, and exact release validation.
 
 ## 9. Risks and Maintenance
 
