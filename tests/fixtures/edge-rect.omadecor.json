@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "kind": "omadecor-decoration",
+  "id": "omadecor/edge-rect-test",
+  "name": "Edge and Rect Test",
+  "version": "1.0.0",
+  "requires": [
+    "primitive.edge",
+    "primitive.rect",
+    "paint.solid",
+    "state.focused"
+  ],
+  "parameters": {},
+  "palette": {},
+  "appearance": { "opacity": 1 },
+  "layers": [
+    {
+      "id": "top-line",
+      "type": "edge",
+      "side": "top",
+      "thickness": 4,
+      "placement": "outside",
+      "paint": { "type": "solid", "color": "#ff00ff" }
+    },
+    {
+      "id": "top-marker",
+      "type": "rect",
+      "x": { "rel": 0.5, "px": -20 },
+      "y": -12,
+      "width": 40,
+      "height": 6,
+      "paint": { "type": "solid", "color": "#00ffff" }
+    }
+  ],
+  "variants": [
+    {
+      "when": { "focused": false },
+      "patch": { "theme": { "opacity": 0.35 } }
+    }
+  ]
+}

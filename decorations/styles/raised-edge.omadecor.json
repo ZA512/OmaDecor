@@ -40,6 +40,14 @@
       "max": 20,
       "step": 1
     },
+    "darkening": {
+      "type": "number",
+      "label": "Darkening",
+      "default": -0.18,
+      "min": -0.4,
+      "max": 0,
+      "step": 0.01
+    },
     "inactiveOpacity": {
       "type": "number",
       "label": "Inactive opacity",
@@ -59,7 +67,9 @@
           "ref": "palette.main"
         },
         "space": "oklch",
-        "lightness": -0.18
+        "lightness": {
+          "ref": "param.darkening"
+        }
       }
     }
   },
@@ -71,7 +81,7 @@
       "id": "main-frame",
       "type": "frame",
       "placement": "outside",
-      "join": "bevel",
+      "join": "square",
       "top": {
         "thickness": {
           "ref": "param.lightWidth"

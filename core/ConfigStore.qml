@@ -18,6 +18,8 @@ Scope {
 
     property bool decorationsEnabled: true
     property string decorationStyle: "raised-edge"
+    property string decorationThemeId: "omadecor/raised-edge"
+    property string decorationThemeFile: ""
     property int lightWidth: 2
     property int darkWidth: 5
     property real shadeFactor: 0.45
@@ -62,6 +64,8 @@ Scope {
             decorations: {
                 enabled: true,
                 style: "raised-edge",
+                theme: "omadecor/raised-edge",
+                themeFile: "",
                 settings: {
                     lightWidth: 2,
                     darkWidth: 5,
@@ -119,6 +123,18 @@ Scope {
     function normalizedColor(value, fallback) {
         var text = String(value || "")
         return /^#[0-9a-fA-F]{6}$/.test(text) ? text.toLowerCase() : fallback
+    }
+
+    function normalizedThemeFile(value) {
+        var text = String(value || "").trim()
+        if (text === "") return ""
+        return /^[A-Za-z0-9][A-Za-z0-9._-]{0,111}\.omadecor\.json$/.test(text) ? text : ""
+    }
+
+    function normalizedThemeId(value) {
+        var text = String(value || "")
+        return /^[a-z0-9][a-z0-9._-]{0,63}\/[a-z0-9][a-z0-9._-]{0,63}$/.test(text)
+            ? text : "omadecor/raised-edge"
     }
 
     function normalizedClasses(value) {
@@ -236,6 +252,8 @@ Scope {
             decorations: {
                 enabled: decorations.enabled !== false,
                 style: decorations.style === "raised-edge" ? "raised-edge" : "raised-edge",
+                theme: root.normalizedThemeId(decorations.theme),
+                themeFile: root.normalizedThemeFile(decorations.themeFile),
                 settings: {
                     lightWidth: root.clampedInteger(settings.lightWidth, 2, 0, 20),
                     darkWidth: root.clampedInteger(settings.darkWidth, 5, 0, 20),
@@ -265,6 +283,8 @@ Scope {
         var clean = root.normalized(data)
         root.decorationsEnabled = clean.decorations.enabled
         root.decorationStyle = clean.decorations.style
+        root.decorationThemeId = clean.decorations.theme
+        root.decorationThemeFile = clean.decorations.themeFile
         root.lightWidth = clean.decorations.settings.lightWidth
         root.darkWidth = clean.decorations.settings.darkWidth
         root.shadeFactor = clean.decorations.settings.shadeFactor
@@ -290,6 +310,8 @@ Scope {
             decorations: {
                 enabled: root.decorationsEnabled,
                 style: root.decorationStyle,
+                theme: root.decorationThemeId,
+                themeFile: root.decorationThemeFile,
                 settings: {
                     lightWidth: root.lightWidth,
                     darkWidth: root.darkWidth,
@@ -386,10 +408,12 @@ Scope {
 
     function setDecorationSettings(values) {
         var incoming = values || {}
-        var clean = root.normalized({
+        var cleanDecoration = root.normalized({
             decorations: {
                 enabled: root.decorationsEnabled,
                 style: root.decorationStyle,
+                theme: root.decorationThemeId,
+                themeFile: incoming.themeFile !== undefined ? incoming.themeFile : root.decorationThemeFile,
                 settings: {
                     lightWidth: incoming.lightWidth !== undefined ? incoming.lightWidth : root.lightWidth,
                     darkWidth: incoming.darkWidth !== undefined ? incoming.darkWidth : root.darkWidth,
@@ -405,7 +429,10 @@ Scope {
             hud: { enabled: root.hudEnabled },
             effects: { enabled: root.effectsEnabled },
             applications: root.applications
-        }).decorations.settings
+        }).decorations
+        var clean = cleanDecoration.settings
+        root.decorationThemeId = cleanDecoration.theme
+        root.decorationThemeFile = cleanDecoration.themeFile
         root.lightWidth = clean.lightWidth
         root.darkWidth = clean.darkWidth
         root.shadeFactor = clean.shadeFactor

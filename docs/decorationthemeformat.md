@@ -21,16 +21,22 @@ state.focused
 color.oklch-derive
 ```
 
+Dans ce profil initial, `frame.join` vaut uniquement `square` et `clip`
+uniquement `none`. Les autres valeurs documentées restent réservées jusqu'à ce
+que le renderer expose explicitement leurs capabilities.
+
 Les autres primitives, gradients, modifiers, états et transitions décrits dans
 ce document sont **réservés**. Un thème qui les déclare est valide dans l'idée
 du format, mais reste indisponible tant que le moteur n'annonce pas les
 capabilities correspondantes. Cette distinction évite une prise en charge
 partielle ou silencieusement incorrecte.
 
-Le chargeur runtime et le renderer générique ne sont pas encore raccordés. Le
-plugin natif continue donc de dessiner Raised Edge avec son renderer spécialisé
-pendant cette phase de migration. L'étape suivante remplacera ce chemin par le
-résultat compilé sans déplacer le dessin hors de Hyprland.
+Le chargeur runtime et le renderer générique sont raccordés. Le service valide
+le fichier avant de transmettre son chemin au plugin ; le plugin refait une
+validation indépendante, compile deux états (`focused` et `inactive`) puis ne
+conserve que les opérations natives. Le JSON n'est jamais interprété pendant
+une frame. Si l'une des validations échoue, le backend Raised Edge historique
+sert de repli sûr.
 
 Emplacements retenus pour la découverte future :
 
@@ -39,8 +45,10 @@ decorations/styles/*.omadecor.json       thèmes intégrés
 ~/.config/omadecor/themes/*.omadecor.json thèmes utilisateur
 ```
 
-Un fichier utilisateur ne pourra référencer aucun chemin externe. Sa sélection
-sera enregistrée par `id`, tandis que ses paramètres resteront dans
+Un fichier utilisateur ne peut référencer aucun chemin externe. Le GUI accepte
+uniquement son nom de fichier et le résout sous
+`~/.config/omadecor/themes/`; aucune saisie de chemin arbitraire n'atteint le
+plugin. Sa sélection et, à terme, ses paramètres restent séparés dans
 `~/.config/omadecor/config.json`.
 
 ## 1. Principe

@@ -282,9 +282,9 @@ Ne pas imposer deux couleurs manuelles à l’utilisateur pour ce premier style.
 # 9. Architecture des styles de décoration
 
 Décision M6.1 : un style est une recette déclarative inerte
-`*.omadecor.json`, validée puis compilée vers le renderer natif. Raised Edge
-reste temporairement implémenté par son backend C++ spécialisé pendant le
-raccordement du renderer générique ; ce chemin n'est pas le modèle cible.
+`*.omadecor.json`, validée puis compilée vers le renderer natif. Raised Edge est
+désormais chargé par ce chemin générique ; son ancien backend C++ ne subsiste
+que comme repli lorsqu'un thème est invalide ou indisponible.
 
 ```text
 DecorationTheme

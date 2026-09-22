@@ -109,6 +109,10 @@ function validateLayer(layer, index, required, layerIds, errors) {
     var capability = capabilityForLayer(layer.type)
     if (required.indexOf(capability) === -1)
         addError(errors, path, capability + " must be declared in requires")
+    if (layer.clip !== undefined && layer.clip !== "none")
+        addError(errors, path + ".clip", "V1 Core supports only clip: none")
+    if (layer.type === "frame" && layer.join !== undefined && layer.join !== "square")
+        addError(errors, path + ".join", "V1 Core supports only square frame joins")
 
     if (layer.type === "edge") {
         if (["top", "right", "bottom", "left"].indexOf(layer.side) === -1)
@@ -460,11 +464,20 @@ function compileTheme(theme, overrides, systemPalette, state, skipValidation) {
             var parsed = parseColor(base)
             if (!parsed) addError(errors, path, "derived palette source must resolve to a color")
             else {
+                function modifier(name, fallback) {
+                    if (!own(entry.derive, name)) return fallback
+                    var resolvedModifier = resolveValue(entry.derive[name], path + ".derive." + name)
+                    if (typeof resolvedModifier !== "number" || !isFinite(resolvedModifier)) {
+                        addError(errors, path + ".derive." + name, "modifier must resolve to a number")
+                        return fallback
+                    }
+                    return resolvedModifier
+                }
                 var oklch = colorToOklch(parsed)
-                oklch.l = clamp(oklch.l + Number(entry.derive.lightness || 0), 0, 1)
-                oklch.c = Math.max(0, oklch.c + Number(entry.derive.chroma || 0))
-                oklch.h += Number(entry.derive.hue || 0)
-                if (own(entry.derive, "alpha")) oklch.a = clamp(Number(entry.derive.alpha), 0, 1)
+                oklch.l = clamp(oklch.l + modifier("lightness", 0), 0, 1)
+                oklch.c = Math.max(0, oklch.c + modifier("chroma", 0))
+                oklch.h += modifier("hue", 0)
+                if (own(entry.derive, "alpha")) oklch.a = clamp(modifier("alpha", oklch.a), 0, 1)
                 value = oklchToColor(oklch)
             }
         } else addError(errors, path, "invalid palette entry")

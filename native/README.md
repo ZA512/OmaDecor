@@ -1,6 +1,9 @@
-# Native Raised Edge
+# Native Decoration Renderer
 
-This Hyprland plugin renders Raised Edge inside the compositor. It targets Hyprland `0.56.2` and must be rebuilt for the exact Hyprland ABI in use.
+This Hyprland plugin compiles bounded `*.omadecor.json` recipes and renders
+their V1 Core operations inside the compositor. It targets Hyprland `0.56.2`
+and must be rebuilt for the exact Hyprland ABI in use. The native build also
+requires `json-c`.
 
 Build it with:
 
@@ -21,6 +24,8 @@ hl.config({
       light_width = 2,
       dark_width = 5,
       shade_factor = 0.45,
+      inactive_opacity = 0.55,
+      theme_path = "/absolute/path/to/raised-edge.omadecor.json",
       excluded_classes = "steam,org.gnome.Calculator",
       col = {
         active = "rgb(47d7ff)",

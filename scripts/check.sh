@@ -15,6 +15,7 @@ omarchy plugin validate .
   core/HyprlandState.qml \
   core/GeometryTracker.qml \
   decorations/ThemeCompiler.js \
+  decorations/DecorationThemeLoader.qml \
   effects/EngineDetector.qml \
   effects/ShaderCatalog.qml \
   effects/CompatibilityManager.qml \
@@ -51,9 +52,19 @@ jq -e '.schemaVersion == 1 and (.validated | type == "array") and (.effects | ty
 
 if command -v node >/dev/null 2>&1; then
   node scripts/validate-theme.js decorations/styles/raised-edge.omadecor.json
+  node scripts/validate-theme.js tests/fixtures/edge-rect.omadecor.json
   node tests/decoration_theme_compiler.test.js
   node tests/effects_rule_generator.test.js
 fi
+
+native_test_dir=$(mktemp -d)
+trap 'rm -rf -- "$native_test_dir"' EXIT
+${CXX:-g++} -std=c++2b -Wall -Wextra -Wpedantic \
+  -I native tests/native_theme_engine.test.cpp native/ThemeEngine.cpp \
+  -o "$native_test_dir/theme-engine-test" $(pkg-config --cflags --libs json-c)
+"$native_test_dir/theme-engine-test" \
+  decorations/styles/raised-edge.omadecor.json \
+  tests/fixtures/edge-rect.omadecor.json
 
 if command -v glslangValidator >/dev/null 2>&1; then
   for shader in effects/shaders/*.glsl; do

@@ -6,6 +6,8 @@
 
 Keep persistent configuration, theme/diagnostic bridges, and normalized HUD state in `core/`; native style metadata and registries in `decorations/`; click-through HUD surfaces and system metrics in `hud/`; HyprWindowShade orchestration in `effects/`; compatibility fingerprints in `compatibility/`; settings pages in `ui/`; and automated checks in `tests/`. Decorations must not depend on Quickshell geometry tracking, and neither Decorations nor HUD may depend on Effects.
 
+Declarative window themes use `*.omadecor.json`. Keep bundled recipes in `decorations/styles/`, update the V1 schema/compiler together, and validate examples with `node scripts/validate-theme.js <file>`. Never interpret theme JSON per frame or add executable theme content.
+
 ## Build, Test, and Development Commands
 
 ```bash

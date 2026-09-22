@@ -168,10 +168,10 @@
                   ]
                 },
                 "space": { "const": "oklch" },
-                "lightness": { "type": "number", "minimum": -1, "maximum": 1 },
-                "chroma": { "type": "number", "minimum": -1, "maximum": 1 },
-                "hue": { "type": "number", "minimum": -360, "maximum": 360 },
-                "alpha": { "type": "number", "minimum": 0, "maximum": 1 }
+                "lightness": { "$ref": "#/$defs/value" },
+                "chroma": { "$ref": "#/$defs/value" },
+                "hue": { "$ref": "#/$defs/value" },
+                "alpha": { "$ref": "#/$defs/value" }
               }
             }
           }
@@ -213,7 +213,7 @@
         "type": { "enum": ["edge", "frame", "rect"] },
         "visible": { "type": "boolean" },
         "opacity": { "$ref": "#/$defs/value" },
-        "clip": { "enum": ["none", "window", "rounded-window"] }
+        "clip": { "const": "none" }
       }
     },
     "edge": {
@@ -228,7 +228,7 @@
             "type": { "const": "edge" },
             "visible": { "type": "boolean" },
             "opacity": { "$ref": "#/$defs/value" },
-            "clip": { "enum": ["none", "window", "rounded-window"] },
+            "clip": { "const": "none" },
             "side": { "enum": ["top", "right", "bottom", "left"] },
             "start": { "$ref": "#/$defs/value" },
             "end": { "$ref": "#/$defs/value" },
@@ -253,13 +253,13 @@
             "type": { "const": "frame" },
             "visible": { "type": "boolean" },
             "opacity": { "$ref": "#/$defs/value" },
-            "clip": { "enum": ["none", "window", "rounded-window"] },
+            "clip": { "const": "none" },
             "top": { "$ref": "#/$defs/edgePart" },
             "right": { "$ref": "#/$defs/edgePart" },
             "bottom": { "$ref": "#/$defs/edgePart" },
             "left": { "$ref": "#/$defs/edgePart" },
             "placement": { "enum": ["inside", "center", "outside"] },
-            "join": { "enum": ["square", "miter", "bevel", "round"] }
+            "join": { "const": "square" }
           }
         }
       ]
@@ -276,7 +276,7 @@
             "type": { "const": "rect" },
             "visible": { "type": "boolean" },
             "opacity": { "$ref": "#/$defs/value" },
-            "clip": { "enum": ["none", "window", "rounded-window"] },
+            "clip": { "const": "none" },
             "x": { "$ref": "#/$defs/value" },
             "y": { "$ref": "#/$defs/value" },
             "width": { "$ref": "#/$defs/value" },

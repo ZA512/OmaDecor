@@ -41,6 +41,7 @@ Item {
         opacityField.text = String(Math.round(root.service.inactiveOpacity * 100))
         activeColorField.text = root.service.activeColor
         inactiveColorField.text = root.service.inactiveColor
+        themeFileField.text = root.service.decorationThemeFile
         root.draftDirty = false
     }
 
@@ -91,7 +92,8 @@ Item {
             shadeFactor: Number(shadeField.text) / 100,
             inactiveOpacity: Number(opacityField.text) / 100,
             activeColor: activeColorField.text,
-            inactiveColor: inactiveColorField.text
+            inactiveColor: inactiveColorField.text,
+            themeFile: themeFileField.text
         }))
         root.actionMessage = "Decoration settings applied"
         root.syncDraft()
@@ -589,12 +591,45 @@ Item {
                             spacing: 13
                             visible: root.currentPage === "decorations"
 
-                            Text { text: "Raised Edge"; color: root.foregroundColor; font.pixelSize: 18; font.bold: true }
+                            Text {
+                                text: root.service ? root.service.decorationThemeId : "Raised Edge"
+                                color: root.foregroundColor
+                                font.pixelSize: 18
+                                font.bold: true
+                            }
                             Text {
                                 width: parent.width
                                 text: "Native renderer. Widths are logical pixels and Hyprland scales them per monitor."
                                 color: root.mutedColor
                                 font.pixelSize: 12
+                                wrapMode: Text.Wrap
+                            }
+
+                            Row {
+                                spacing: 12
+                                LabeledField {
+                                    id: themeFileField
+                                    label: "User theme file (blank = built-in)"
+                                    fieldWidth: 360
+                                    onEdited: root.draftDirty = true
+                                }
+                                Text {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: root.service ? root.service.decorationThemeState : ""
+                                    color: root.service && root.service.decorationThemeError === ""
+                                        ? root.accentColor : Commons.Color.urgent
+                                    font.pixelSize: 12
+                                }
+                            }
+
+                            Text {
+                                width: parent.width
+                                text: root.service && root.service.decorationThemeError !== ""
+                                    ? root.service.decorationThemeError
+                                    : "Custom files are loaded from ~/.config/omadecor/themes/."
+                                color: root.service && root.service.decorationThemeError !== ""
+                                    ? Commons.Color.urgent : root.mutedColor
+                                font.pixelSize: 11
                                 wrapMode: Text.Wrap
                             }
 

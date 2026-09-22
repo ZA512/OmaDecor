@@ -115,8 +115,18 @@ Validate a theme while authoring it with:
 node scripts/validate-theme.js path/to/theme.omadecor.json
 ```
 
-Runtime loading of user themes is the next implementation stage; the current
-release still renders Raised Edge through the specialized native backend.
+To use a custom theme, place it in the owned user directory and enter only its
+filename in **OD → Decoration → User theme file**:
+
+```bash
+mkdir -p ~/.config/omadecor/themes
+cp my-theme.omadecor.json ~/.config/omadecor/themes/
+```
+
+OmaDecor validates the theme in Quickshell and again in the native plugin. It
+rejects symlinks, files over 256 KiB, unsupported capabilities, cyclic
+references, and rendering-budget violations. Invalid themes fall back to the
+built-in Raised Edge renderer without leaving windows undecorated.
 
 ## Disable or Remove
 

@@ -38,14 +38,18 @@ COmaRaisedEdgeDecoration::~COmaRaisedEdgeDecoration() {
 }
 
 SDecorationPositioningInfo COmaRaisedEdgeDecoration::getPositioningInfo() {
-    const auto visible    = shouldDraw();
-    const auto lightWidth = visible ? std::max<Config::INTEGER>(0, g_config.lightWidth->value()) : 0;
-    const auto darkWidth  = visible ? std::max<Config::INTEGER>(0, g_config.darkWidth->value()) : 0;
-
-    m_extents = {
-        Vector2D{static_cast<double>(darkWidth), static_cast<double>(lightWidth)},
-        Vector2D{static_cast<double>(lightWidth), static_cast<double>(darkWidth)},
-    };
+    if (!shouldDraw())
+        m_extents = {};
+    else if (g_theme && m_window)
+        m_extents = themeExtents(*g_theme, m_window->size(Desktop::View::IGeometric::GEOMETRIC_CURRENT));
+    else {
+        const auto lightWidth = std::max<Config::INTEGER>(0, g_config.lightWidth->value());
+        const auto darkWidth  = std::max<Config::INTEGER>(0, g_config.darkWidth->value());
+        m_extents = {
+            Vector2D{static_cast<double>(darkWidth), static_cast<double>(lightWidth)},
+            Vector2D{static_cast<double>(lightWidth), static_cast<double>(darkWidth)},
+        };
+    }
 
     SDecorationPositioningInfo info;
     info.policy         = DECORATION_POSITION_STICKY;
@@ -63,6 +67,14 @@ void COmaRaisedEdgeDecoration::onPositioningReply(const SDecorationPositioningRe
 void COmaRaisedEdgeDecoration::draw(PHLMONITOR monitor, const float& alpha) {
     if (!monitor || !shouldDraw())
         return;
+
+    if (g_theme)
+        drawTheme(monitor, alpha, *g_theme);
+    else
+        drawLegacy(monitor, alpha);
+}
+
+void COmaRaisedEdgeDecoration::drawLegacy(PHLMONITOR monitor, const float& alpha) {
 
     auto box = assignedBoxGlobal().translate(-monitor->m_position + m_window->m_floatingOffset).scale(monitor->m_scale).round();
     if (box.width < 1 || box.height < 1)
@@ -89,6 +101,87 @@ void COmaRaisedEdgeDecoration::draw(PHLMONITOR monitor, const float& alpha) {
     }
 }
 
+void COmaRaisedEdgeDecoration::drawTheme(PHLMONITOR monitor, const float& alpha, const SOmaCompiledTheme& theme) {
+    const auto windowSize = m_window->size(Desktop::View::IGeometric::GEOMETRIC_CURRENT);
+    if (windowSize.x <= 0 || windowSize.y <= 0)
+        return;
+
+    auto outerGlobal   = assignedBoxGlobal();
+    m_lastGlobalBox    = outerGlobal.translate(m_window->m_floatingOffset);
+    const auto origin  = Vector2D{outerGlobal.x + m_extents.topLeft.x, outerGlobal.y + m_extents.topLeft.y};
+    const auto active  = Desktop::focusState()->isWindowActive(m_window.lock());
+    const auto& state  = active ? theme.focused : theme.inactive;
+    const auto opacity = std::clamp(state.opacity * alpha, 0.0, 1.0);
+
+    const auto minimumX = -m_extents.topLeft.x;
+    const auto minimumY = -m_extents.topLeft.y;
+    const auto maximumX = windowSize.x + m_extents.bottomRight.x;
+    const auto maximumY = windowSize.y + m_extents.bottomRight.y;
+
+    for (const auto& operation : state.operations) {
+        auto box = operationBox(operation, windowSize);
+        const auto left   = std::max(box.x, minimumX);
+        const auto top    = std::max(box.y, minimumY);
+        const auto right  = std::min(box.x + box.width, maximumX);
+        const auto bottom = std::min(box.y + box.height, maximumY);
+        if (right <= left || bottom <= top)
+            continue;
+
+        box = {origin.x + left, origin.y + top, right - left, bottom - top};
+        box.translate(-monitor->m_position + m_window->m_floatingOffset).scale(monitor->m_scale).round();
+        const auto operationAlpha = std::clamp(operation.color.alpha * operation.opacity * opacity, 0.0, 1.0);
+        addRectangle(box, {static_cast<float>(operation.color.red), static_cast<float>(operation.color.green),
+                           static_cast<float>(operation.color.blue), static_cast<float>(operationAlpha)});
+    }
+}
+
+CBox COmaRaisedEdgeDecoration::operationBox(const SOmaDrawOperation& operation, const Vector2D& windowSize) const {
+    if (operation.type == eOmaPrimitiveType::RECT)
+        return {operation.x.resolve(windowSize.x), operation.y.resolve(windowSize.y), operation.width.resolve(windowSize.x),
+                operation.height.resolve(windowSize.y)};
+
+    const auto horizontal = operation.side == eOmaSide::TOP || operation.side == eOmaSide::BOTTOM;
+    const auto extent     = horizontal ? windowSize.x : windowSize.y;
+    const auto start      = operation.start.resolve(extent);
+    const auto end        = operation.end.resolve(extent);
+    const auto length     = std::max(0.0, end - start);
+    double     offset     = 0.0;
+    if (operation.placement == eOmaPlacement::OUTSIDE)
+        offset = operation.distance + operation.thickness;
+    else if (operation.placement == eOmaPlacement::CENTER)
+        offset = operation.distance + operation.thickness / 2.0;
+    else
+        offset = -operation.distance;
+
+    switch (operation.side) {
+        case eOmaSide::TOP: return {start, -offset, length, operation.thickness};
+        case eOmaSide::RIGHT: return {windowSize.x + offset - operation.thickness, start, operation.thickness, length};
+        case eOmaSide::BOTTOM: return {start, windowSize.y + offset - operation.thickness, length, operation.thickness};
+        case eOmaSide::LEFT: return {-offset, start, operation.thickness, length};
+    }
+    return {};
+}
+
+SBoxExtents COmaRaisedEdgeDecoration::themeExtents(const SOmaCompiledTheme& theme, const Vector2D& windowSize) const {
+    double left = 0.0, top = 0.0, right = 0.0, bottom = 0.0;
+    const auto includeState = [&](const SOmaCompiledState& state) {
+        for (const auto& operation : state.operations) {
+            const auto box = operationBox(operation, windowSize);
+            left           = std::max(left, -box.x);
+            top            = std::max(top, -box.y);
+            right          = std::max(right, box.x + box.width - windowSize.x);
+            bottom         = std::max(bottom, box.y + box.height - windowSize.y);
+        }
+    };
+    includeState(theme.focused);
+    includeState(theme.inactive);
+    constexpr double MAX_EXTENT = 128.0;
+    return {
+        Vector2D{std::clamp(left, 0.0, MAX_EXTENT), std::clamp(top, 0.0, MAX_EXTENT)},
+        Vector2D{std::clamp(right, 0.0, MAX_EXTENT), std::clamp(bottom, 0.0, MAX_EXTENT)},
+    };
+}
+
 eDecorationType COmaRaisedEdgeDecoration::getDecorationType() {
     return DECORATION_CUSTOM;
 }
@@ -111,7 +204,7 @@ uint64_t COmaRaisedEdgeDecoration::getDecorationFlags() {
 }
 
 std::string COmaRaisedEdgeDecoration::getDisplayName() {
-    return "OmaDecor Raised Edge";
+    return "OmaDecor Native Theme";
 }
 
 void COmaRaisedEdgeDecoration::refreshConfiguration() {

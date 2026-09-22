@@ -45,6 +45,11 @@ Scope {
     readonly property string effectsEngineVersion: runtimeDiagnostics.effectsEngineVersion
     readonly property string nativeApplyState: nativeBridge.state
     readonly property string decorationStyle: configStore.decorationStyle
+    readonly property string decorationThemeId: decorationThemeLoader.metadata.id || configStore.decorationThemeId
+    readonly property string decorationThemeFile: configStore.decorationThemeFile
+    readonly property string decorationThemeState: decorationThemeLoader.state
+    readonly property string decorationThemeError: decorationThemeLoader.lastError
+    readonly property string decorationThemePath: decorationThemeLoader.selectedPath
     readonly property int lightWidth: configStore.lightWidth
     readonly property int darkWidth: configStore.darkWidth
     readonly property real shadeFactor: configStore.shadeFactor
@@ -240,6 +245,7 @@ Scope {
                     error: nativeBridge.lastError,
                     style: configStore.decorationStyle,
                     registry: decorationRegistry.diagnostics(),
+                    theme: decorationThemeLoader.diagnostics(),
                     colorSource: configStore.useThemeAccent ? "theme-accent" : "manual",
                     themeAccent: themeBridge.accentHex
                 },
@@ -431,11 +437,18 @@ Scope {
         id: decorationRegistry
     }
 
+    DecorationThemeLoader {
+        id: decorationThemeLoader
+        config: configStore
+        themeAccent: themeBridge.accentHex
+    }
+
     NativeBridge {
         id: nativeBridge
         config: configStore
         runtimeAvailable: runtimeDiagnostics.nativeDecorationLoaded
         themeAccent: themeBridge.accentHex
+        themePath: decorationThemeLoader.valid ? decorationThemeLoader.selectedPath : ""
     }
 
     EffectsManager {
@@ -463,6 +476,14 @@ Scope {
         target: runtimeDiagnostics
 
         function onRefreshed() {
+            nativeBridge.applyConfiguration()
+        }
+    }
+
+    Connections {
+        target: decorationThemeLoader
+
+        function onValidated() {
             nativeBridge.applyConfiguration()
         }
     }

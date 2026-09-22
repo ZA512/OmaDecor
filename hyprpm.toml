@@ -3,7 +3,7 @@ name = "OmaDecor"
 authors = ["OmaDecor contributors"]
 
 [omadecor-native]
-description = "Compositor-native Raised Edge window decoration for OmaDecor."
+description = "Compositor-native declarative window decorations for OmaDecor."
 authors = ["OmaDecor contributors"]
 output = "native/omadecor-native.so"
 build = [

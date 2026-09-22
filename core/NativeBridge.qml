@@ -14,6 +14,10 @@ Scope {
     property bool applyQueued: false
     property string stdoutText: ""
     property string stderrText: ""
+    readonly property string builtinThemePath: root.localFilePath(
+        Qt.resolvedUrl("../decorations/styles/raised-edge.omadecor.json")
+    )
+    property string themePath: root.builtinThemePath
 
     signal applied(bool success)
 
@@ -49,6 +53,16 @@ Scope {
         return "\"" + String(value).replace(/\\/g, "\\\\").replace(/\"/g, "\\\"") + "\""
     }
 
+    function localFilePath(value) {
+        var text = String(value || "")
+        if (text.indexOf("file://") === 0) text = text.slice(7)
+        try {
+            return decodeURIComponent(text)
+        } catch (error) {
+            return text
+        }
+    }
+
     function borderOnlyScript() {
         var borderSize = root.config ? Math.max(0, Math.min(20, Math.round(root.config.stockBorderSize))) : 5
         return "hl.config({ general = { border_size = " + borderSize + " } })"
@@ -71,6 +85,8 @@ Scope {
             + ", light_width = " + lightWidth
             + ", dark_width = " + darkWidth
             + ", shade_factor = " + shadeFactor
+            + ", inactive_opacity = " + Math.max(0, Math.min(1, Number(root.config.inactiveOpacity)))
+            + ", theme_path = " + root.quotedLuaString(root.themePath)
             + ", excluded_classes = " + excluded
             + ", col = { active = \"" + activeColor + "\", inactive = \"" + inactiveColor + "\" } } } })"
     }
@@ -102,6 +118,7 @@ Scope {
             runtimeAvailable: root.runtimeAvailable,
             colorSource: root.config && root.config.useThemeAccent === true ? "theme-accent" : "manual",
             effectiveActiveColor: root.effectiveActiveColor(),
+            themePath: root.themePath,
             excludedClassCount: root.classList() === "" ? 0 : root.classList().split(",").length,
             error: root.lastError,
             lastAppliedAtMs: root.lastAppliedAtMs

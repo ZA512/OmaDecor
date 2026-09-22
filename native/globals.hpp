@@ -7,6 +7,8 @@
 #include <hyprland/src/config/values/types/StringValue.hpp>
 #include <hyprland/src/plugins/PluginAPI.hpp>
 
+#include "ThemeEngine.hpp"
+
 inline HANDLE PHANDLE = nullptr;
 
 struct SOmaDecorConfig {
@@ -16,8 +18,11 @@ struct SOmaDecorConfig {
     SP<Config::Values::CColorValue>  activeColor;
     SP<Config::Values::CColorValue>  inactiveColor;
     SP<Config::Values::CFloatValue>  shadeFactor;
+    SP<Config::Values::CFloatValue>  inactiveOpacity;
     SP<Config::Values::CStringValue> excludedClasses;
+    SP<Config::Values::CStringValue> themePath;
 };
 
 inline SOmaDecorConfig g_config = {};
-
+inline std::shared_ptr<const SOmaCompiledTheme> g_theme;
+inline std::string                              g_themeError;

@@ -16,7 +16,7 @@
 #include "globals.hpp"
 
 namespace {
-constexpr std::string_view DISPLAY_NAME = "OmaDecor Raised Edge";
+constexpr std::string_view DISPLAY_NAME = "OmaDecor Native Theme";
 
 COmaRaisedEdgeDecoration* decorationFor(PHLWINDOW window) {
     if (!window)
@@ -58,6 +58,53 @@ void damageAllDecorations() {
             decoration->damageEntire();
     }
 }
+
+SOmaColor themeColor(const CHyprColor& color) {
+    return {color.r, color.g, color.b, color.a};
+}
+
+void reloadTheme() {
+    static std::string lastReportedError;
+    const auto         path = g_config.themePath ? g_config.themePath->value() : std::string{};
+    if (path.empty()) {
+        g_theme.reset();
+        g_themeError = "theme path is empty";
+        return;
+    }
+
+    const auto active   = CHyprColor{static_cast<uint64_t>(g_config.activeColor->value())};
+    const auto inactive = CHyprColor{static_cast<uint64_t>(g_config.inactiveColor->value())};
+    SOmaThemeInputs inputs;
+    inputs.parameters = {
+        {"mainColor", themeColor(active)},
+        {"lightWidth", static_cast<double>(g_config.lightWidth->value())},
+        {"darkWidth", static_cast<double>(g_config.darkWidth->value())},
+        {"darkening", -0.4 * (1.0 - static_cast<double>(g_config.shadeFactor->value()))},
+        {"inactiveOpacity", static_cast<double>(g_config.inactiveOpacity->value())},
+    };
+    inputs.systemColors = {
+        {"accent", themeColor(active)},
+        {"background", SOmaColor{0.067, 0.067, 0.067, 1.0}},
+        {"foreground", SOmaColor{0.933, 0.933, 0.933, 1.0}},
+        {"border", themeColor(inactive)},
+    };
+
+    auto loaded = loadOmaDecorationTheme(path, inputs);
+    if (loaded) {
+        g_theme      = std::move(loaded.theme);
+        g_themeError = {};
+        lastReportedError.clear();
+        return;
+    }
+
+    g_theme.reset();
+    g_themeError = loaded.error;
+    if (g_themeError != lastReportedError) {
+        HyprlandAPI::addNotification(PHANDLE, "[OmaDecor] Theme rejected; using Raised Edge fallback: " + g_themeError,
+                                     CHyprColor{1.F, 0.55F, 0.2F, 1.F}, 6000);
+        lastReportedError = g_themeError;
+    }
+}
 }
 
 APICALL EXPORT std::string PLUGIN_API_VERSION() {
@@ -81,7 +128,10 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     g_config.inactiveColor = makeShared<Config::Values::CColorValue>("plugin:omadecor:col.inactive", "Main color for inactive windows", 0xFF64748B);
     g_config.shadeFactor = makeShared<Config::Values::CFloatValue>("plugin:omadecor:shade_factor", "Multiplier used to derive the dark edge color", 0.45F,
                                                                    Config::Values::SFloatValueOptions{.min = 0.F, .max = 1.F});
+    g_config.inactiveOpacity = makeShared<Config::Values::CFloatValue>("plugin:omadecor:inactive_opacity", "Opacity for inactive theme variants", 0.55F,
+                                                                       Config::Values::SFloatValueOptions{.min = 0.F, .max = 1.F});
     g_config.excludedClasses = makeShared<Config::Values::CStringValue>("plugin:omadecor:excluded_classes", "Comma-separated exact app classes to exclude", "");
+    g_config.themePath = makeShared<Config::Values::CStringValue>("plugin:omadecor:theme_path", "Path to a validated .omadecor.json theme", "");
 
     HyprlandAPI::addConfigValueV2(PHANDLE, g_config.enabled);
     HyprlandAPI::addConfigValueV2(PHANDLE, g_config.lightWidth);
@@ -89,21 +139,27 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     HyprlandAPI::addConfigValueV2(PHANDLE, g_config.activeColor);
     HyprlandAPI::addConfigValueV2(PHANDLE, g_config.inactiveColor);
     HyprlandAPI::addConfigValueV2(PHANDLE, g_config.shadeFactor);
+    HyprlandAPI::addConfigValueV2(PHANDLE, g_config.inactiveOpacity);
     HyprlandAPI::addConfigValueV2(PHANDLE, g_config.excludedClasses);
+    HyprlandAPI::addConfigValueV2(PHANDLE, g_config.themePath);
 
     HyprlandAPI::reloadConfig();
+    reloadTheme();
 
     static auto openListener = Event::bus()->m_events.window.open.listen([](PHLWINDOW window) { attachDecoration(window); });
     static auto activeListener = Event::bus()->m_events.window.active.listen([](PHLWINDOW, Desktop::eFocusReason) { damageAllDecorations(); });
     static auto classListener = Event::bus()->m_events.window.class_.listen([](PHLWINDOW window) { refreshWindow(window); });
     static auto fullscreenListener = Event::bus()->m_events.window.fullscreen.listen([](PHLWINDOW window) { refreshWindow(window); });
     static auto floatingListener = Event::bus()->m_events.window.floating.listen([](PHLWINDOW window) { refreshWindow(window); });
-    static auto configListener = Event::bus()->m_events.config.reloaded.listen([] { refreshAllWindows(); });
+    static auto configListener = Event::bus()->m_events.config.reloaded.listen([] {
+        reloadTheme();
+        refreshAllWindows();
+    });
 
     refreshAllWindows();
     HyprlandAPI::addNotification(PHANDLE, "[OmaDecor] Native Raised Edge loaded", CHyprColor{0.2F, 1.F, 0.4F, 1.F}, 3000);
 
-    return {"omadecor-native", "Compositor-native Raised Edge window decoration", "OmaDecor contributors", "0.1.0"};
+    return {"omadecor-native", "Compositor-native declarative window decorations", "OmaDecor contributors", "0.2.0"};
 }
 
 APICALL EXPORT void PLUGIN_EXIT() {}
