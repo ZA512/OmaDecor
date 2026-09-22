@@ -86,3 +86,4 @@ struct SOmaThemeLoadResult {
 };
 
 SOmaThemeLoadResult loadOmaDecorationTheme(const std::string& path, const SOmaThemeInputs& inputs);
+bool applyOmaThemeParameterOverrides(const std::string& json, SOmaThemeInputs& inputs, std::string& error);

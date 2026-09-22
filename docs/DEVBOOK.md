@@ -73,8 +73,11 @@ Raised Edge implementation.
 User themes are selected by basename only and resolved under
 `~/.config/omadecor/themes/`; native loading rejects symlinks, non-regular
 files, files over 256 KiB, unsupported capabilities, cycles, and exceeded
-budgets. The current GUI exposes the filename directly; catalogue browsing and
-fully generated controls for arbitrary parameters remain follow-up work.
+budgets. The GUI watches this directory, exposes a basename-only catalogue,
+and generates bounded controls for number, color, boolean, and enum
+parameters. Overrides are stored separately in
+`decorations.parameters`, validated in both runtimes, and sent to Hyprland as
+a bounded scalar JSON object.
 
 Theme mode is enabled by default. `core/ThemeBridge.qml` consumes Omarchy's existing `qs.Commons.Color` singleton, so a theme switch updates the native active color without file polling. Inactive windows use the same theme accent with configurable opacity; manual active/inactive colors remain available when theme mode is disabled.
 
@@ -140,7 +143,7 @@ M3 local validation covers real HUD rendering, independent metrics, fullscreen s
 5. **M4 — Effects integration:** implemented locally; passive detection, exact-fingerprint suspension, override, GUI status, and installation guidance are functional.
 6. **M5 — Effects configuration:** implemented locally for the bundled shader catalogue, global event mapping, per-application inheritance/exclusion/replacement, owned-rule generation, and explicit Apply workflow.
 7. **M6 — Compatibility:** fingerprint lifecycle, exact-fingerprint overrides, effect-specific degradation, safe suppression, transition notifications, and diagnostics are implemented. No HyprWindowShade combination is marked validated until the external engine is installed and the effect matrix is tested.
-8. **M6.1 — Decoration themes:** V1 Core schema, dual semantic validation, native compilation/rendering, safe fallback, explicit user-file selection, canonical Raised Edge theme, and regression tests are implemented. Catalogue browsing and generated controls for arbitrary theme parameters remain pending.
+8. **M6.1 — Decoration themes:** V1 Core schema, dual semantic validation, native compilation/rendering, safe fallback, watched user-theme catalogue, generated parameter controls, canonical Raised Edge theme, and regression tests are implemented.
 9. **M7 — Release:** `hyprpm` commit pins, documentation, licenses, recovery, and exact release validation.
 
 ## 9. Risks and Maintenance

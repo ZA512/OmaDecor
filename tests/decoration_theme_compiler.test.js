@@ -73,4 +73,22 @@ const invalidDimensionResult = context.validateTheme(invalidDimension)
 assert.equal(invalidDimensionResult.ok, false)
 assert.match(JSON.stringify(invalidDimensionResult.errors), /number required/)
 
+const edgeRectTheme = JSON.parse(fs.readFileSync(
+    "tests/fixtures/edge-rect.omadecor.json", "utf8"
+))
+const edgeRectValidation = context.validateTheme(edgeRectTheme)
+assert.equal(edgeRectValidation.ok, true, JSON.stringify(edgeRectValidation.errors))
+const edgeRect = context.compileTheme(edgeRectTheme, {
+    markerWidth: 64,
+    markerColor: "#112233",
+    enabled: false,
+    mode: "compact"
+}, systemPalette, { focused: true })
+assert.equal(edgeRect.ok, true, JSON.stringify(edgeRect.errors))
+assert.equal(edgeRect.compiled.parameters.markerWidth, 64)
+assert.equal(edgeRect.compiled.parameters.enabled, false)
+assert.equal(edgeRect.compiled.parameters.mode, "compact")
+assert.equal(edgeRect.compiled.layers[1].width, 64)
+assert.equal(edgeRect.compiled.layers[1].paint.color, "#112233")
+
 console.log("decoration theme compiler: ok")

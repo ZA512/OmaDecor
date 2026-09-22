@@ -18,6 +18,7 @@ Scope {
         Qt.resolvedUrl("../decorations/styles/raised-edge.omadecor.json")
     )
     property string themePath: root.builtinThemePath
+    property var themeParameters: ({})
 
     signal applied(bool success)
 
@@ -68,6 +69,10 @@ Scope {
         return "hl.config({ general = { border_size = " + borderSize + " } })"
     }
 
+    function themeParametersJson() {
+        return JSON.stringify(root.themeParameters || {})
+    }
+
     function fullScript() {
         var enabled = root.config && root.config.decorationsEnabled === true
         var lightWidth = Math.max(0, Math.min(20, Math.round(root.config.lightWidth)))
@@ -87,6 +92,7 @@ Scope {
             + ", shade_factor = " + shadeFactor
             + ", inactive_opacity = " + Math.max(0, Math.min(1, Number(root.config.inactiveOpacity)))
             + ", theme_path = " + root.quotedLuaString(root.themePath)
+            + ", theme_parameters = " + root.quotedLuaString(root.themeParametersJson())
             + ", excluded_classes = " + excluded
             + ", col = { active = \"" + activeColor + "\", inactive = \"" + inactiveColor + "\" } } } })"
     }
@@ -119,6 +125,7 @@ Scope {
             colorSource: root.config && root.config.useThemeAccent === true ? "theme-accent" : "manual",
             effectiveActiveColor: root.effectiveActiveColor(),
             themePath: root.themePath,
+            themeParameters: root.themeParameters,
             excludedClassCount: root.classList() === "" ? 0 : root.classList().split(",").length,
             error: root.lastError,
             lastAppliedAtMs: root.lastAppliedAtMs

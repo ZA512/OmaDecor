@@ -89,6 +89,18 @@ void reloadTheme() {
         {"border", themeColor(inactive)},
     };
 
+    std::string parameterError;
+    if (!applyOmaThemeParameterOverrides(g_config.themeParameters ? g_config.themeParameters->value() : "{}", inputs, parameterError)) {
+        g_theme.reset();
+        g_themeError = parameterError;
+        if (g_themeError != lastReportedError) {
+            HyprlandAPI::addNotification(PHANDLE, "[OmaDecor] Theme parameters rejected; using Raised Edge fallback: " + g_themeError,
+                                         CHyprColor{1.F, 0.55F, 0.2F, 1.F}, 6000);
+            lastReportedError = g_themeError;
+        }
+        return;
+    }
+
     auto loaded = loadOmaDecorationTheme(path, inputs);
     if (loaded) {
         g_theme      = std::move(loaded.theme);
@@ -132,6 +144,7 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
                                                                        Config::Values::SFloatValueOptions{.min = 0.F, .max = 1.F});
     g_config.excludedClasses = makeShared<Config::Values::CStringValue>("plugin:omadecor:excluded_classes", "Comma-separated exact app classes to exclude", "");
     g_config.themePath = makeShared<Config::Values::CStringValue>("plugin:omadecor:theme_path", "Path to a validated .omadecor.json theme", "");
+    g_config.themeParameters = makeShared<Config::Values::CStringValue>("plugin:omadecor:theme_parameters", "Bounded JSON object with theme parameter overrides", "{}");
 
     HyprlandAPI::addConfigValueV2(PHANDLE, g_config.enabled);
     HyprlandAPI::addConfigValueV2(PHANDLE, g_config.lightWidth);
@@ -142,6 +155,7 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     HyprlandAPI::addConfigValueV2(PHANDLE, g_config.inactiveOpacity);
     HyprlandAPI::addConfigValueV2(PHANDLE, g_config.excludedClasses);
     HyprlandAPI::addConfigValueV2(PHANDLE, g_config.themePath);
+    HyprlandAPI::addConfigValueV2(PHANDLE, g_config.themeParameters);
 
     HyprlandAPI::reloadConfig();
     reloadTheme();
@@ -159,7 +173,7 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     refreshAllWindows();
     HyprlandAPI::addNotification(PHANDLE, "[OmaDecor] Native Raised Edge loaded", CHyprColor{0.2F, 1.F, 0.4F, 1.F}, 3000);
 
-    return {"omadecor-native", "Compositor-native declarative window decorations", "OmaDecor contributors", "0.2.0"};
+    return {"omadecor-native", "Compositor-native declarative window decorations", "OmaDecor contributors", "0.3.0"};
 }
 
 APICALL EXPORT void PLUGIN_EXIT() {}

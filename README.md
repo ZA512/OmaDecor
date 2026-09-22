@@ -115,13 +115,18 @@ Validate a theme while authoring it with:
 node scripts/validate-theme.js path/to/theme.omadecor.json
 ```
 
-To use a custom theme, place it in the owned user directory and enter only its
-filename in **OD → Decoration → User theme file**:
+To use a custom theme, place it in the owned user directory:
 
 ```bash
 mkdir -p ~/.config/omadecor/themes
 cp my-theme.omadecor.json ~/.config/omadecor/themes/
 ```
+
+Open **OD → Decoration** and select it with the theme arrows. The directory is
+watched, so matching files appear without entering a path. OmaDecor generates
+number, color, boolean, and enum controls from the theme's `parameters`
+definitions; **Reset values** restores the theme defaults (or the current
+Omarchy accent where the theme references it).
 
 OmaDecor validates the theme in Quickshell and again in the native plugin. It
 rejects symlinks, files over 256 KiB, unsupported capabilities, cyclic

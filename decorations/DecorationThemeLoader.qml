@@ -1,4 +1,5 @@
 import QtQuick
+import Qt.labs.folderlistmodel
 import Quickshell
 import Quickshell.Io
 import "ThemeCompiler.js" as ThemeCompiler
@@ -13,6 +14,8 @@ Scope {
     property string lastError: ""
     property var metadata: ({})
     property var compiled: null
+    property var parameterDefinitions: []
+    property var availableThemes: []
 
     readonly property string builtinPath: root.localFilePath(
         Qt.resolvedUrl("styles/raised-edge.omadecor.json")
@@ -37,19 +40,67 @@ Scope {
 
     function parameters() {
         if (!root.config) return ({})
-        return {
-            mainColor: root.config.useThemeAccent ? root.themeAccent : root.config.activeColor,
-            lightWidth: root.config.lightWidth,
-            darkWidth: root.config.darkWidth,
-            darkening: -0.4 * (1 - root.config.shadeFactor),
-            inactiveOpacity: root.config.inactiveOpacity
+        var result = ({})
+        if (root.config.decorationThemeFile === "") {
+            result = {
+                mainColor: root.config.useThemeAccent ? root.themeAccent : root.config.activeColor,
+                lightWidth: root.config.lightWidth,
+                darkWidth: root.config.darkWidth,
+                darkening: -0.4 * (1 - root.config.shadeFactor),
+                inactiveOpacity: root.config.inactiveOpacity
+            }
         }
+        var custom = root.config.decorationParameters || {}
+        for (var name in custom) result[name] = custom[name]
+        return result
+    }
+
+    function rebuildCatalog() {
+        var result = [{
+            fileName: "",
+            label: "Raised Edge (built-in)",
+            source: "built-in"
+        }]
+        for (var index = 0; index < userThemeFiles.count; index++) {
+            var fileName = String(userThemeFiles.get(index, "fileName") || "")
+            if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,111}\.omadecor\.json$/.test(fileName)) continue
+            result.push({
+                fileName: fileName,
+                label: fileName.slice(0, -".omadecor.json".length),
+                source: "user"
+            })
+        }
+        root.availableThemes = result
+    }
+
+    function buildParameterDefinitions(theme, compilation) {
+        var definitions = []
+        var parameters = theme && theme.parameters ? theme.parameters : {}
+        var values = compilation && compilation.parameters ? compilation.parameters : {}
+        var names = Object.keys(parameters).sort()
+        for (var index = 0; index < names.length; index++) {
+            var name = names[index]
+            var definition = parameters[name]
+            definitions.push({
+                id: name,
+                type: String(definition.type),
+                label: String(definition.label || name),
+                unit: String(definition.unit || ""),
+                minimum: definition.min,
+                maximum: definition.max,
+                step: definition.step,
+                options: Array.isArray(definition.options) ? definition.options : [],
+                value: values[name]
+            })
+        }
+        return definitions
     }
 
     function validateText(rawText) {
         root.valid = false
         root.compiled = null
         root.metadata = ({})
+        root.parameterDefinitions = []
         if (String(rawText || "").length > 262144) {
             root.state = "error"
             root.lastError = "Theme exceeds the 256 KiB limit"
@@ -80,6 +131,7 @@ Scope {
                 drawOperations: validation.drawOperations
             }
             root.compiled = result.compiled
+            root.parameterDefinitions = root.buildParameterDefinitions(theme, result.compiled)
             root.lastError = ""
             root.state = "ready"
             root.valid = true
@@ -97,6 +149,8 @@ Scope {
             valid: root.valid,
             path: root.selectedPath,
             userTheme: root.config ? root.config.decorationThemeFile : "",
+            availableThemes: root.availableThemes.length,
+            parameters: root.parameterDefinitions,
             metadata: root.metadata,
             error: root.lastError
         }
@@ -106,7 +160,10 @@ Scope {
         root.state = "loading"
         root.valid = false
         root.lastError = ""
+        Qt.callLater(themeFile.reload)
     }
+
+    onThemeAccentChanged: Qt.callLater(themeFile.reload)
 
     FileView {
         id: themeFile
@@ -120,9 +177,35 @@ Scope {
             root.valid = false
             root.compiled = null
             root.metadata = ({})
+            root.parameterDefinitions = []
             root.state = "error"
             root.lastError = "Theme file could not be loaded (" + String(error) + ")"
             root.validated(false)
         }
     }
+
+    FolderListModel {
+        id: userThemeFiles
+        folder: root.userThemeDir === "" ? "file:///nonexistent/omadecor-themes"
+            : "file://" + root.userThemeDir
+        nameFilters: ["*.omadecor.json"]
+        showFiles: true
+        showDirs: false
+        showDotAndDotDot: false
+        showHidden: false
+        showOnlyReadable: true
+        sortField: FolderListModel.Name
+        onCountChanged: root.rebuildCatalog()
+        onStatusChanged: root.rebuildCatalog()
+    }
+
+    Connections {
+        target: root.config
+
+        function onRevisionChanged() {
+            themeFile.reload()
+        }
+    }
+
+    Component.onCompleted: root.rebuildCatalog()
 }

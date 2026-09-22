@@ -707,3 +707,60 @@ SOmaThemeLoadResult loadOmaDecorationTheme(const std::string& path, const SOmaTh
     JsonPtr rootOwner{root, &json_object_put};
     return CThemeCompiler{root, inputs}.compile();
 }
+
+bool applyOmaThemeParameterOverrides(const std::string& json, SOmaThemeInputs& inputs, std::string& error) {
+    if (json.empty() || json == "{}")
+        return true;
+    if (json.size() > 16 * 1024) {
+        error = "theme parameter payload exceeds 16 KiB";
+        return false;
+    }
+
+    auto* tokener = json_tokener_new_ex(8);
+    if (!tokener) {
+        error = "theme parameter parser allocation failed";
+        return false;
+    }
+    json_tokener_set_flags(tokener, JSON_TOKENER_STRICT | JSON_TOKENER_VALIDATE_UTF8);
+    auto* root       = json_tokener_parse_ex(tokener, json.data(), static_cast<int>(json.size()));
+    const auto parse = json_tokener_get_error(tokener);
+    json_tokener_free(tokener);
+    if (parse != json_tokener_success || !root || json_object_get_type(root) != json_type_object || json_object_object_length(root) > 64) {
+        if (root)
+            json_object_put(root);
+        error = "theme parameters must be a bounded JSON object";
+        return false;
+    }
+    JsonPtr owner{root, &json_object_put};
+    json_object_object_foreach(root, key, value) {
+        const std::string name{key};
+        if (!std::regex_match(name, std::regex{"^[a-z][A-Za-z0-9-]{0,63}$"})) {
+            error = "invalid theme parameter name";
+            return false;
+        }
+        switch (json_object_get_type(value)) {
+            case json_type_boolean: inputs.parameters[name] = json_object_get_boolean(value) != 0; break;
+            case json_type_double:
+            case json_type_int: {
+                const auto number = json_object_get_double(value);
+                if (!std::isfinite(number) || number < -1000000.0 || number > 1000000.0) {
+                    error = "theme parameter number outside bounds";
+                    return false;
+                }
+                inputs.parameters[name] = number;
+                break;
+            }
+            case json_type_string: {
+                const std::string text{json_object_get_string(value)};
+                if (text.size() > 128) {
+                    error = "theme parameter string exceeds 128 bytes";
+                    return false;
+                }
+                inputs.parameters[name] = text;
+                break;
+            }
+            default: error = "theme parameter values must be scalar"; return false;
+        }
+    }
+    return true;
+}

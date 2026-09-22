@@ -21,6 +21,7 @@ struct SOmaDecorConfig {
     SP<Config::Values::CFloatValue>  inactiveOpacity;
     SP<Config::Values::CStringValue> excludedClasses;
     SP<Config::Values::CStringValue> themePath;
+    SP<Config::Values::CStringValue> themeParameters;
 };
 
 inline SOmaDecorConfig g_config = {};

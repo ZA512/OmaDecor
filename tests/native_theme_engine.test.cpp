@@ -32,13 +32,24 @@ int main(int argc, char** argv) {
     assert(std::abs(result.theme->focused.operations[2].thickness - 7.0) < 0.0001);
     assert(result.theme->focused.operations[0].color.blue > result.theme->focused.operations[2].color.blue);
 
+    std::string parameterError;
+    assert(applyOmaThemeParameterOverrides(
+        R"({"markerWidth":64,"markerColor":"#112233","enabled":false,"mode":"compact"})", inputs, parameterError));
+    assert(parameterError.empty());
+
     const auto edgeRect = loadOmaDecorationTheme(argv[2], inputs);
     assert(edgeRect && edgeRect.error.empty());
     assert(edgeRect.theme->id == "omadecor/edge-rect-test");
     assert(edgeRect.theme->focused.operations.size() == 2);
     assert(edgeRect.theme->focused.operations[0].type == eOmaPrimitiveType::EDGE);
     assert(edgeRect.theme->focused.operations[1].type == eOmaPrimitiveType::RECT);
+    assert(std::abs(edgeRect.theme->focused.operations[1].width.pixels - 64.0) < 0.0001);
+    assert(edgeRect.theme->focused.operations[1].color.red < edgeRect.theme->focused.operations[1].color.blue);
     assert(std::abs(edgeRect.theme->inactive.opacity - 0.35) < 0.0001);
+
+    SOmaThemeInputs invalidInputs;
+    assert(!applyOmaThemeParameterOverrides(R"({"nested":{"value":1}})", invalidInputs, parameterError));
+    assert(parameterError == "theme parameter values must be scalar");
 
     std::cout << "native decoration theme engine: ok\n";
     return 0;

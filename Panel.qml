@@ -34,14 +34,6 @@ Item {
     }
 
     function syncDraft() {
-        if (!root.service) return
-        lightWidthField.text = String(root.service.lightWidth)
-        darkWidthField.text = String(root.service.darkWidth)
-        shadeField.text = String(Math.round(root.service.shadeFactor * 100))
-        opacityField.text = String(Math.round(root.service.inactiveOpacity * 100))
-        activeColorField.text = root.service.activeColor
-        inactiveColorField.text = root.service.inactiveColor
-        themeFileField.text = root.service.decorationThemeFile
         root.draftDirty = false
     }
 
@@ -82,21 +74,6 @@ Item {
             root.shell.hide((root.manifest && root.manifest.id) || "omadecor")
         else
             root.close()
-    }
-
-    function applyDecorationDraft() {
-        if (!root.service) return
-        root.service.setDecorationSettings(JSON.stringify({
-            lightWidth: Number(lightWidthField.text),
-            darkWidth: Number(darkWidthField.text),
-            shadeFactor: Number(shadeField.text) / 100,
-            inactiveOpacity: Number(opacityField.text) / 100,
-            activeColor: activeColorField.text,
-            inactiveColor: inactiveColorField.text,
-            themeFile: themeFileField.text
-        }))
-        root.actionMessage = "Decoration settings applied"
-        root.syncDraft()
     }
 
     function toggleApplication(entry, key) {
@@ -225,6 +202,141 @@ Item {
                 font.pixelSize: 13
                 clip: true
                 onTextEdited: field.edited()
+            }
+        }
+    }
+
+    component ThemeParameterRow: Rectangle {
+        id: parameterRow
+
+        required property var definition
+        readonly property bool isNumber: definition.type === "number"
+        readonly property bool isColor: definition.type === "color"
+        readonly property bool isBoolean: definition.type === "boolean"
+        readonly property bool isEnum: definition.type === "enum"
+
+        function displayNumber(value) {
+            return String(Math.round(Number(value) * 1000000) / 1000000)
+        }
+
+        width: parent ? parent.width : 0
+        height: 46
+        radius: 7
+        color: Commons.Color.background
+        border.color: Commons.Color.popups.border
+
+        Column {
+            anchors.left: parent.left
+            anchors.leftMargin: 10
+            anchors.verticalCenter: parent.verticalCenter
+            width: Math.max(160, parent.width - parameterEditor.width - 30)
+            spacing: 2
+
+            Text {
+                width: parent.width
+                text: parameterRow.definition.label
+                color: root.foregroundColor
+                font.pixelSize: 12
+                font.bold: true
+                elide: Text.ElideRight
+            }
+            Text {
+                width: parent.width
+                text: parameterRow.definition.id
+                color: root.mutedColor
+                font.pixelSize: 10
+                elide: Text.ElideRight
+            }
+        }
+
+        Row {
+            id: parameterEditor
+            anchors.right: parent.right
+            anchors.rightMargin: 7
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: 5
+
+            ActionButton {
+                visible: parameterRow.isNumber
+                label: "−"
+                buttonWidth: 32
+                onClicked: if (root.service) {
+                    root.service.adjustDecorationParameter(parameterRow.definition.id, -1)
+                    root.actionMessage = "Parameter updated"
+                }
+            }
+            Text {
+                visible: parameterRow.isNumber
+                anchors.verticalCenter: parent.verticalCenter
+                width: 76
+                horizontalAlignment: Text.AlignHCenter
+                text: parameterRow.displayNumber(parameterRow.definition.value)
+                    + (parameterRow.definition.unit ? " " + parameterRow.definition.unit : "")
+                color: root.foregroundColor
+                font.pixelSize: 12
+            }
+            ActionButton {
+                visible: parameterRow.isNumber
+                label: "+"
+                buttonWidth: 32
+                onClicked: if (root.service) {
+                    root.service.adjustDecorationParameter(parameterRow.definition.id, 1)
+                    root.actionMessage = "Parameter updated"
+                }
+            }
+
+            Rectangle {
+                visible: parameterRow.isColor
+                width: 32
+                height: 30
+                radius: 6
+                color: parameterRow.definition.value
+                border.color: root.foregroundColor
+            }
+            Rectangle {
+                visible: parameterRow.isColor
+                width: 130
+                height: 32
+                radius: 6
+                color: root.panelColor
+                border.color: colorInput.activeFocus ? root.accentColor : Commons.Color.popups.border
+
+                TextInput {
+                    id: colorInput
+                    anchors.fill: parent
+                    anchors.margins: 8
+                    text: parameterRow.isColor ? String(parameterRow.definition.value) : ""
+                    color: root.foregroundColor
+                    selectionColor: root.accentColor
+                    font.pixelSize: 12
+                    clip: true
+                    onEditingFinished: if (root.service) {
+                        var result = root.service.setDecorationParameter(
+                            parameterRow.definition.id, text)
+                        root.actionMessage = result === "ok" ? "Parameter updated" : "Invalid color"
+                        if (result !== "ok") text = String(parameterRow.definition.value)
+                    }
+                }
+            }
+
+            TogglePill {
+                visible: parameterRow.isBoolean
+                label: ""
+                checked: parameterRow.definition.value === true
+                onToggled: if (root.service) {
+                    root.service.setDecorationParameter(parameterRow.definition.id, !checked)
+                    root.actionMessage = "Parameter updated"
+                }
+            }
+
+            ActionButton {
+                visible: parameterRow.isEnum
+                label: String(parameterRow.definition.value)
+                buttonWidth: 150
+                onClicked: if (root.service) {
+                    root.service.cycleDecorationParameter(parameterRow.definition.id)
+                    root.actionMessage = "Parameter updated"
+                }
             }
         }
     }
@@ -586,88 +698,154 @@ Item {
                             }
                         }
 
-                        Column {
+                        Flickable {
                             anchors.fill: parent
-                            spacing: 13
                             visible: root.currentPage === "decorations"
+                            contentWidth: width
+                            contentHeight: decorationContent.height
+                            clip: true
 
-                            Text {
-                                text: root.service ? root.service.decorationThemeId : "Raised Edge"
-                                color: root.foregroundColor
-                                font.pixelSize: 18
-                                font.bold: true
-                            }
-                            Text {
+                            Column {
+                                id: decorationContent
                                 width: parent.width
-                                text: "Native renderer. Widths are logical pixels and Hyprland scales them per monitor."
-                                color: root.mutedColor
-                                font.pixelSize: 12
-                                wrapMode: Text.Wrap
-                            }
+                                spacing: 13
 
-                            Row {
-                                spacing: 12
-                                LabeledField {
-                                    id: themeFileField
-                                    label: "User theme file (blank = built-in)"
-                                    fieldWidth: 360
-                                    onEdited: root.draftDirty = true
+                                Text {
+                                    text: root.service ? root.service.decorationThemeId : "Raised Edge"
+                                    color: root.foregroundColor
+                                    font.pixelSize: 18
+                                    font.bold: true
                                 }
                                 Text {
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    text: root.service ? root.service.decorationThemeState : ""
-                                    color: root.service && root.service.decorationThemeError === ""
-                                        ? root.accentColor : Commons.Color.urgent
+                                    width: parent.width
+                                    text: "Native renderer. Theme files are discovered automatically; changes apply immediately."
+                                    color: root.mutedColor
+                                    font.pixelSize: 12
+                                    wrapMode: Text.Wrap
+                                }
+
+                                Row {
+                                    spacing: 7
+                                    ActionButton {
+                                        label: "‹"
+                                        buttonWidth: 34
+                                        onClicked: if (root.service) {
+                                            var result = root.service.cycleDecorationTheme(-1)
+                                            root.actionMessage = result === "ok" ? "Theme selected" : result
+                                        }
+                                    }
+                                    ActionButton {
+                                        label: root.service ? root.service.currentDecorationThemeLabel() : "Unavailable"
+                                        buttonWidth: 280
+                                        selected: root.service && root.service.decorationThemeFile !== ""
+                                        onClicked: if (root.service) {
+                                            var result = root.service.cycleDecorationTheme(1)
+                                            root.actionMessage = result === "ok" ? "Theme selected" : result
+                                        }
+                                    }
+                                    ActionButton {
+                                        label: "›"
+                                        buttonWidth: 34
+                                        onClicked: if (root.service) {
+                                            var result = root.service.cycleDecorationTheme(1)
+                                            root.actionMessage = result === "ok" ? "Theme selected" : result
+                                        }
+                                    }
+                                    Text {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: root.service ? root.service.decorationThemes.length + " theme(s) · "
+                                            + root.service.decorationThemeState : ""
+                                        color: root.service && root.service.decorationThemeError === ""
+                                            ? root.accentColor : Commons.Color.urgent
+                                        font.pixelSize: 12
+                                    }
+                                }
+
+                                Text {
+                                    width: parent.width
+                                    text: root.service && root.service.decorationThemeError !== ""
+                                        ? root.service.decorationThemeError
+                                        : "Place *.omadecor.json files in ~/.config/omadecor/themes/."
+                                    color: root.service && root.service.decorationThemeError !== ""
+                                        ? Commons.Color.urgent : root.mutedColor
+                                    font.pixelSize: 11
+                                    wrapMode: Text.Wrap
+                                }
+
+                                Row {
+                                    spacing: 10
+                                    TogglePill {
+                                        label: "Theme accent"
+                                        checked: root.service ? root.service.useThemeAccent : true
+                                        onToggled: if (root.service) {
+                                            root.service.setDecorationSettings(JSON.stringify({ useThemeAccent: !checked }))
+                                            root.actionMessage = "Color source updated"
+                                        }
+                                    }
+                                    Rectangle {
+                                        width: 34
+                                        height: 28
+                                        radius: 6
+                                        color: root.service ? root.service.themeAccent : root.accentColor
+                                        border.color: root.foregroundColor
+                                    }
+                                    Text {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: root.service ? root.service.themeAccent : ""
+                                        color: root.mutedColor
+                                        font.pixelSize: 12
+                                    }
+                                }
+
+                                Row {
+                                    width: parent.width
+                                    spacing: 10
+                                    Text {
+                                        width: parent.width - resetThemeParameters.width - 10
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: "Theme parameters"
+                                        color: root.foregroundColor
+                                        font.pixelSize: 14
+                                        font.bold: true
+                                    }
+                                    ActionButton {
+                                        id: resetThemeParameters
+                                        label: "Reset values"
+                                        buttonWidth: 110
+                                        enabled: root.service && root.service.decorationThemeParameters.length > 0
+                                        onClicked: if (root.service) {
+                                            var result = root.service.resetDecorationParameters()
+                                            root.actionMessage = result === "ok" ? "Theme values reset" : result
+                                        }
+                                    }
+                                }
+
+                                Column {
+                                    id: parameterColumn
+                                    width: parent.width
+                                    spacing: 6
+
+                                    Repeater {
+                                        model: root.service ? root.service.decorationThemeParameters : []
+                                        delegate: ThemeParameterRow {
+                                            required property var modelData
+                                            definition: modelData
+                                            width: parameterColumn.width
+                                        }
+                                    }
+                                    Text {
+                                        visible: !root.service || root.service.decorationThemeParameters.length === 0
+                                        text: "This theme has no configurable parameters."
+                                        color: root.mutedColor
+                                        font.pixelSize: 12
+                                    }
+                                }
+
+                                Text {
+                                    text: root.actionMessage
+                                    color: root.accentColor
                                     font.pixelSize: 12
                                 }
-                            }
-
-                            Text {
-                                width: parent.width
-                                text: root.service && root.service.decorationThemeError !== ""
-                                    ? root.service.decorationThemeError
-                                    : "Custom files are loaded from ~/.config/omadecor/themes/."
-                                color: root.service && root.service.decorationThemeError !== ""
-                                    ? Commons.Color.urgent : root.mutedColor
-                                font.pixelSize: 11
-                                wrapMode: Text.Wrap
-                            }
-
-                            Row {
-                                spacing: 10
-                                TogglePill {
-                                    label: "Theme accent"
-                                    checked: root.service ? root.service.useThemeAccent : true
-                                    onToggled: if (root.service) root.service.setDecorationSettings(JSON.stringify({ useThemeAccent: !checked }))
-                                }
-                                Rectangle { width: 34; height: 28; radius: 6; color: root.service ? root.service.themeAccent : root.accentColor; border.color: root.foregroundColor }
-                                Text { anchors.verticalCenter: parent.verticalCenter; text: root.service ? root.service.themeAccent : ""; color: root.mutedColor; font.pixelSize: 12 }
-                            }
-
-                            Row {
-                                spacing: 12
-                                LabeledField { id: lightWidthField; label: "Top/right width (0–20)"; onEdited: root.draftDirty = true }
-                                LabeledField { id: darkWidthField; label: "Bottom/left width (0–20)"; onEdited: root.draftDirty = true }
-                                LabeledField { id: shadeField; label: "Darkening factor (%)"; onEdited: root.draftDirty = true }
-                                LabeledField { id: opacityField; label: "Inactive opacity (%)"; onEdited: root.draftDirty = true }
-                            }
-
-                            Row {
-                                spacing: 12
-                                LabeledField { id: activeColorField; label: "Manual active color"; fieldWidth: 210; onEdited: root.draftDirty = true }
-                                LabeledField { id: inactiveColorField; label: "Manual inactive color"; fieldWidth: 210; onEdited: root.draftDirty = true }
-                            }
-
-                            Text {
-                                text: root.draftDirty ? "Changes pending" : root.actionMessage
-                                color: root.draftDirty ? Commons.Color.urgent : root.accentColor
-                                font.pixelSize: 12
-                            }
-
-                            Row {
-                                spacing: 10
-                                ActionButton { label: "Apply"; selected: root.draftDirty; enabled: root.draftDirty; onClicked: root.applyDecorationDraft() }
-                                ActionButton { label: "Discard"; enabled: root.draftDirty; onClicked: root.syncDraft() }
                             }
                         }
 

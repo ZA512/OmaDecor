@@ -38,18 +38,19 @@ conserve que les opérations natives. Le JSON n'est jamais interprété pendant
 une frame. Si l'une des validations échoue, le backend Raised Edge historique
 sert de repli sûr.
 
-Emplacements retenus pour la découverte future :
+Emplacements utilisés par la découverte automatique :
 
 ```text
 decorations/styles/*.omadecor.json       thèmes intégrés
 ~/.config/omadecor/themes/*.omadecor.json thèmes utilisateur
 ```
 
-Un fichier utilisateur ne peut référencer aucun chemin externe. Le GUI accepte
-uniquement son nom de fichier et le résout sous
-`~/.config/omadecor/themes/`; aucune saisie de chemin arbitraire n'atteint le
-plugin. Sa sélection et, à terme, ses paramètres restent séparés dans
-`~/.config/omadecor/config.json`.
+Un fichier utilisateur ne peut référencer aucun chemin externe. Le GUI
+surveille `~/.config/omadecor/themes/`, ne conserve que le nom de fichier et le
+résout sous ce répertoire ; aucune saisie de chemin arbitraire n'atteint le
+plugin. La sélection et les valeurs de paramètres sont stockées séparément
+dans `~/.config/omadecor/config.json`. Les contrôles number, color, boolean et
+enum sont générés depuis la section `parameters` du thème.
 
 ## 1. Principe
 

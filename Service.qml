@@ -50,6 +50,8 @@ Scope {
     readonly property string decorationThemeState: decorationThemeLoader.state
     readonly property string decorationThemeError: decorationThemeLoader.lastError
     readonly property string decorationThemePath: decorationThemeLoader.selectedPath
+    readonly property var decorationThemes: decorationThemeLoader.availableThemes
+    readonly property var decorationThemeParameters: decorationThemeLoader.parameterDefinitions
     readonly property int lightWidth: configStore.lightWidth
     readonly property int darkWidth: configStore.darkWidth
     readonly property real shadeFactor: configStore.shadeFactor
@@ -114,6 +116,99 @@ Scope {
         } catch (error) {
             return "invalid"
         }
+    }
+
+    function decorationParameterDefinition(name) {
+        var key = String(name || "")
+        for (var index = 0; index < root.decorationThemeParameters.length; index++) {
+            var definition = root.decorationThemeParameters[index]
+            if (definition.id === key) return definition
+        }
+        return null
+    }
+
+    function selectDecorationTheme(fileName) {
+        var requested = String(fileName || "")
+        var found = false
+        for (var index = 0; index < root.decorationThemes.length; index++) {
+            if (root.decorationThemes[index].fileName === requested) {
+                found = true
+                break
+            }
+        }
+        if (!found) return "not-found"
+        configStore.setDecorationSettings({ themeFile: requested })
+        return "ok"
+    }
+
+    function cycleDecorationTheme(direction) {
+        var themes = root.decorationThemes
+        if (!themes || themes.length === 0) return "unavailable"
+        var current = 0
+        for (var index = 0; index < themes.length; index++)
+            if (themes[index].fileName === root.decorationThemeFile) current = index
+        var delta = Number(direction) < 0 ? -1 : 1
+        var next = (current + delta + themes.length) % themes.length
+        return root.selectDecorationTheme(themes[next].fileName)
+    }
+
+    function currentDecorationThemeLabel() {
+        for (var index = 0; index < root.decorationThemes.length; index++)
+            if (root.decorationThemes[index].fileName === root.decorationThemeFile) {
+                if (decorationThemeLoader.valid && decorationThemeLoader.metadata.name)
+                    return String(decorationThemeLoader.metadata.name)
+                return root.decorationThemes[index].label
+            }
+        return root.decorationThemeFile || "Raised Edge (built-in)"
+    }
+
+    function setDecorationParameter(name, value) {
+        var definition = root.decorationParameterDefinition(name)
+        if (!definition) return "unknown-parameter"
+        var clean = value
+        if (definition.type === "number") {
+            clean = Number(value)
+            if (!isFinite(clean)) return "invalid"
+            clean = Math.max(Number(definition.minimum), Math.min(Number(definition.maximum), clean))
+            var step = Number(definition.step)
+            if (isFinite(step) && step > 0) {
+                var minimum = Number(definition.minimum)
+                clean = minimum + Math.round((clean - minimum) / step) * step
+                clean = Math.round(clean * 1000000) / 1000000
+            }
+        } else if (definition.type === "color") {
+            clean = String(value || "").trim().toLowerCase()
+            if (!/^#[0-9a-f]{6}([0-9a-f]{2})?$/.test(clean)) return "invalid"
+        } else if (definition.type === "boolean") {
+            clean = value === true || String(value).toLowerCase() === "true"
+        } else if (definition.type === "enum") {
+            clean = String(value)
+            if (!Array.isArray(definition.options) || definition.options.indexOf(clean) === -1)
+                return "invalid"
+        } else return "unsupported"
+        return configStore.setDecorationParameter(definition.id, clean) ? "ok" : "invalid"
+    }
+
+    function adjustDecorationParameter(name, direction) {
+        var definition = root.decorationParameterDefinition(name)
+        if (!definition || definition.type !== "number") return "invalid"
+        var step = Number(definition.step)
+        if (!isFinite(step) || step <= 0) return "invalid"
+        return root.setDecorationParameter(name,
+            Number(definition.value) + (Number(direction) < 0 ? -step : step))
+    }
+
+    function cycleDecorationParameter(name) {
+        var definition = root.decorationParameterDefinition(name)
+        if (!definition || definition.type !== "enum" || !Array.isArray(definition.options)
+                || definition.options.length === 0) return "invalid"
+        var current = definition.options.indexOf(definition.value)
+        return root.setDecorationParameter(name,
+            definition.options[(current + 1) % definition.options.length])
+    }
+
+    function resetDecorationParameters() {
+        return configStore.resetDecorationParameters() ? "ok" : "invalid"
     }
 
     function setEffectEvent(eventName, effectId) {
@@ -352,6 +447,22 @@ Scope {
             return root.setDecorationSettings(valueJson)
         }
 
+        function selectDecorationTheme(fileName: string): string {
+            return root.selectDecorationTheme(fileName)
+        }
+
+        function setDecorationParameter(name: string, valueJson: string): string {
+            try {
+                return root.setDecorationParameter(name, JSON.parse(valueJson))
+            } catch (error) {
+                return "invalid"
+            }
+        }
+
+        function resetDecorationParameters(): string {
+            return root.resetDecorationParameters()
+        }
+
         function setEffectEvent(eventName: string, effectId: string): string {
             return root.setEffectEvent(eventName, effectId)
         }
@@ -449,6 +560,8 @@ Scope {
         runtimeAvailable: runtimeDiagnostics.nativeDecorationLoaded
         themeAccent: themeBridge.accentHex
         themePath: decorationThemeLoader.valid ? decorationThemeLoader.selectedPath : ""
+        themeParameters: decorationThemeLoader.valid && decorationThemeLoader.compiled
+            ? decorationThemeLoader.compiled.parameters : ({})
     }
 
     EffectsManager {

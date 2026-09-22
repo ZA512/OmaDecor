@@ -20,6 +20,7 @@ Scope {
     property string decorationStyle: "raised-edge"
     property string decorationThemeId: "omadecor/raised-edge"
     property string decorationThemeFile: ""
+    property var decorationParameters: ({})
     property int lightWidth: 2
     property int darkWidth: 5
     property real shadeFactor: 0.45
@@ -66,6 +67,7 @@ Scope {
                 style: "raised-edge",
                 theme: "omadecor/raised-edge",
                 themeFile: "",
+                parameters: {},
                 settings: {
                     lightWidth: 2,
                     darkWidth: 5,
@@ -135,6 +137,23 @@ Scope {
         var text = String(value || "")
         return /^[a-z0-9][a-z0-9._-]{0,63}\/[a-z0-9][a-z0-9._-]{0,63}$/.test(text)
             ? text : "omadecor/raised-edge"
+    }
+
+    function normalizedDecorationParameters(value) {
+        if (!value || typeof value !== "object" || Array.isArray(value)) return ({})
+        var result = ({})
+        var names = Object.keys(value).sort().slice(0, 64)
+        for (var index = 0; index < names.length; index++) {
+            var name = names[index]
+            if (!/^[a-z][A-Za-z0-9-]{0,63}$/.test(name)) continue
+            var item = value[name]
+            if (typeof item === "boolean") result[name] = item
+            else if (typeof item === "number" && isFinite(item))
+                result[name] = Math.max(-1000000, Math.min(1000000, item))
+            else if (typeof item === "string")
+                result[name] = item.replace(/[\n\r\0]/g, " ").slice(0, 128)
+        }
+        return result
     }
 
     function normalizedClasses(value) {
@@ -254,6 +273,7 @@ Scope {
                 style: decorations.style === "raised-edge" ? "raised-edge" : "raised-edge",
                 theme: root.normalizedThemeId(decorations.theme),
                 themeFile: root.normalizedThemeFile(decorations.themeFile),
+                parameters: root.normalizedDecorationParameters(decorations.parameters),
                 settings: {
                     lightWidth: root.clampedInteger(settings.lightWidth, 2, 0, 20),
                     darkWidth: root.clampedInteger(settings.darkWidth, 5, 0, 20),
@@ -285,6 +305,7 @@ Scope {
         root.decorationStyle = clean.decorations.style
         root.decorationThemeId = clean.decorations.theme
         root.decorationThemeFile = clean.decorations.themeFile
+        root.decorationParameters = clean.decorations.parameters
         root.lightWidth = clean.decorations.settings.lightWidth
         root.darkWidth = clean.decorations.settings.darkWidth
         root.shadeFactor = clean.decorations.settings.shadeFactor
@@ -312,6 +333,7 @@ Scope {
                 style: root.decorationStyle,
                 theme: root.decorationThemeId,
                 themeFile: root.decorationThemeFile,
+                parameters: root.decorationParameters,
                 settings: {
                     lightWidth: root.lightWidth,
                     darkWidth: root.darkWidth,
@@ -414,6 +436,7 @@ Scope {
                 style: root.decorationStyle,
                 theme: root.decorationThemeId,
                 themeFile: incoming.themeFile !== undefined ? incoming.themeFile : root.decorationThemeFile,
+                parameters: root.decorationParameters,
                 settings: {
                     lightWidth: incoming.lightWidth !== undefined ? incoming.lightWidth : root.lightWidth,
                     darkWidth: incoming.darkWidth !== undefined ? incoming.darkWidth : root.darkWidth,
@@ -445,6 +468,30 @@ Scope {
         root.revision += 1
         root.configurationChanged()
         root.scheduleSave()
+    }
+
+    function setDecorationParameter(name, value) {
+        var key = String(name || "")
+        if (!/^[a-z][A-Za-z0-9-]{0,63}$/.test(key)) return false
+        var next = ({})
+        for (var existing in root.decorationParameters)
+            next[existing] = root.decorationParameters[existing]
+        next[key] = value
+        var clean = root.normalizedDecorationParameters(next)
+        if (clean[key] === undefined) return false
+        root.decorationParameters = clean
+        root.revision += 1
+        root.configurationChanged()
+        root.scheduleSave()
+        return true
+    }
+
+    function resetDecorationParameters() {
+        root.decorationParameters = ({})
+        root.revision += 1
+        root.configurationChanged()
+        root.scheduleSave()
+        return true
     }
 
     function setEffectEvent(eventName, effectId) {
