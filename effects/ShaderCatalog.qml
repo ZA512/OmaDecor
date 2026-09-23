@@ -1,10 +1,13 @@
 import QtQuick
-import Qt.labs.folderlistmodel
 import Quickshell
+import Quickshell.Io
+import "EffectValidator.js" as EffectValidator
 
 Scope {
     id: root
 
+    property var config: null
+    property var backendCapabilities: []
     readonly property var eventNames: [
         "open", "close", "move", "resize", "workspace", "fullscreenEnter",
         "fullscreenExit", "float", "tile", "focus", "unfocus", "urgent"
@@ -39,14 +42,25 @@ Scope {
         }
     ]
     property var packEffects: []
-    readonly property var effects: root.builtinEffects.concat(root.packEffects)
+    property string externalScanOutput: ""
+    property bool externalScanPending: false
+    readonly property alias effectPackRegistry: effectPackRegistry
+    readonly property var effects: root.builtinEffects
+        .concat(effectPackRegistry.effects)
+        .concat(root.packEffects)
     readonly property string dataHome: Quickshell.env("XDG_DATA_HOME")
         || (Quickshell.env("HOME") + "/.local/share")
     readonly property string externalPackRoot: root.dataHome
         + "/omadecor/shader-packs/hyprland-shader"
     readonly property string externalShaderDir: root.externalPackRoot + "/shaders"
+    readonly property string cacheHome: Quickshell.env("XDG_CACHE_HOME")
+        || (Quickshell.env("HOME") + "/.cache")
+    readonly property string externalPreviewDir: root.cacheHome
+        + "/omadecor/effects/previews/hyprland-shader"
+    readonly property string externalScannerPath: root.localFilePath(
+        Qt.resolvedUrl("../scripts/scan-external-shaders.sh"))
     readonly property bool externalPackInstalled: root.packEffects.length > 0
-    readonly property int externalPairCount: Math.floor(root.packEffects.length / 2)
+    property int externalPairCount: 0
 
     function shaderPath(fileName) {
         var value = Qt.resolvedUrl("shaders/" + fileName).toString()
@@ -54,8 +68,24 @@ Scope {
         return value
     }
 
+    function localFilePath(value) {
+        var text = String(value || "")
+        if (text.indexOf("file://") === 0) text = text.slice(7)
+        try { return decodeURIComponent(text) }
+        catch (error) { return text }
+    }
+
     function passthroughPath() {
         return root.shaderPath("passthrough.glsl")
+    }
+
+    function managedShaderRoots() {
+        var shaderDirectory = root.shaderPath("passthrough.glsl")
+        var split = shaderDirectory.lastIndexOf("/shaders/")
+        var roots = [root.cacheHome + "/omadecor/effects/",
+            root.dataHome + "/omadecor/shader-packs/"]
+        if (split !== -1) roots.push(shaderDirectory.slice(0, split) + "/")
+        return roots
     }
 
     function titleForBase(baseName) {
@@ -67,24 +97,38 @@ Scope {
         return words.join(" ")
     }
 
-    function rebuildExternalPack() {
+    function rebuildExternalPack(lines) {
         var result = []
-        for (var index = 0; index < externalFiles.count; index++) {
-            var fileName = String(externalFiles.get(index, "fileName") || "")
-            var match = fileName.match(/^([a-z0-9][a-z0-9-]{0,63})_(open|close)\.glsl$/)
-            if (!match) continue
-            var baseName = match[1]
-            var eventName = match[2]
+        var seenIds = ({})
+        var pairEvents = ({})
+        for (var index = 0; index < lines.length; index++) {
+            var record
+            try { record = JSON.parse(String(lines[index] || "")) }
+            catch (error) { continue }
+            var baseName = String(record.base || "")
+            var eventName = String(record.event || "")
+            if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(baseName)
+                    || (eventName !== "open" && eventName !== "close")) continue
+            var previewName = String(record.preview || "")
+            if (!/^[a-z0-9][a-z0-9-]{0,63}-[0-9a-f]{16}\.gif$/.test(previewName)
+                    || previewName.indexOf(baseName + "-") !== 0) previewName = ""
+            var effectId = "hyprland-shader." + baseName + "." + eventName
+            if (seenIds[effectId]) continue
+            seenIds[effectId] = true
+            if (!pairEvents[baseName]) pairEvents[baseName] = ({})
+            pairEvents[baseName][eventName] = true
             result.push({
-                id: "hyprland-shader." + baseName + "." + eventName,
+                id: effectId,
                 name: root.titleForBase(baseName),
                 events: [eventName],
-                path: root.externalShaderDir + "/" + fileName,
+                path: root.externalShaderDir + "/" + baseName + "_" + eventName + ".glsl",
                 source: "external",
                 pack: "Hyprland-Shader",
                 author: "jbuck95 / upstream authors",
                 license: "External pack — see LICENSE",
-                description: eventName === "open" ? "Open animation" : "Close animation"
+                description: eventName === "open" ? "Open animation" : "Close animation",
+                preview: previewName === "" ? ""
+                    : root.externalPreviewDir + "/" + previewName
             })
         }
         result.sort(function(left, right) {
@@ -92,7 +136,23 @@ Scope {
             if (left.name > right.name) return 1
             return left.id < right.id ? -1 : 1
         })
+        var pairCount = 0
+        for (var pairName in pairEvents)
+            if (pairEvents[pairName].open && pairEvents[pairName].close) pairCount++
         root.packEffects = result
+        root.externalPairCount = pairCount
+    }
+
+    function refreshExternalPack() {
+        effectPackRegistry.refresh()
+        root.packEffects = []
+        root.externalPairCount = 0
+        if (externalScanProcess.running) {
+            root.externalScanPending = true
+            return
+        }
+        root.externalScanOutput = ""
+        externalScanProcess.running = true
     }
 
     function findEffect(effectId) {
@@ -109,14 +169,20 @@ Scope {
         var result = []
         for (var index = 0; index < root.effects.length; index++) {
             var entry = root.effects[index]
-            if (entry.events.indexOf(eventName) !== -1) result.push(entry)
+            if (entry.events.indexOf(eventName) !== -1 && root.requirementsSatisfied(entry))
+                result.push(entry)
         }
         return result
+    }
+
+    function requirementsSatisfied(entry) {
+        return EffectValidator.missingCapabilities(entry, root.backendCapabilities).length === 0
     }
 
     function isCompatible(eventName, effectId) {
         var entry = root.findEffect(effectId)
         return !!entry && entry.events.indexOf(eventName) !== -1
+            && root.requirementsSatisfied(entry)
     }
 
     function displayName(effectId) {
@@ -131,19 +197,28 @@ Scope {
         return result
     }
 
-    FolderListModel {
-        id: externalFiles
-        folder: "file://" + root.externalShaderDir
-        nameFilters: ["*_open.glsl", "*_close.glsl"]
-        showFiles: true
-        showDirs: false
-        showDotAndDotDot: false
-        showHidden: false
-        showOnlyReadable: true
-        sortField: FolderListModel.Name
-        onCountChanged: root.rebuildExternalPack()
-        onStatusChanged: root.rebuildExternalPack()
+    Process {
+        id: externalScanProcess
+        command: [
+            "/usr/bin/bash", root.externalScannerPath,
+            root.externalShaderDir, root.externalPreviewDir
+        ]
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: root.externalScanOutput = String(text || "")
+        }
+        // qmllint disable signal-handler-parameters
+        onExited: function(exitCode) {
+            if (exitCode === 0)
+                root.rebuildExternalPack(root.externalScanOutput.split("\n"))
+            if (root.externalScanPending) {
+                root.externalScanPending = false
+                Qt.callLater(root.refreshExternalPack)
+            }
+        }
     }
 
-    Component.onCompleted: root.rebuildExternalPack()
+    EffectPackRegistry { id: effectPackRegistry; config: root.config }
+
+    Component.onCompleted: root.refreshExternalPack()
 }

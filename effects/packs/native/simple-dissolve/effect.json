@@ -1,0 +1,39 @@
+{
+  "$schema": "../../../schema/effect.schema.json",
+  "schemaVersion": 1,
+  "kind": "omadecor-effect-pack",
+  "id": "omadecor/simple-dissolve",
+  "name": "Simple Dissolve",
+  "version": "1.0.0",
+  "description": "A lightweight seeded dissolve written for OmaDecor.",
+  "source": {
+    "type": "native",
+    "project": "OmaDecor",
+    "url": "https://github.com/ZA512/OmaDecor",
+    "revision": "bundled",
+    "authors": ["OmaDecor contributors"],
+    "license": "MIT"
+  },
+  "compatibility": {
+    "sourceFormat": "native",
+    "events": ["open", "close"]
+  },
+  "shaders": {
+    "open": "open.glsl",
+    "close": "close.glsl"
+  },
+  "requires": [
+    "shader.progress",
+    "shader.random-seed",
+    "shader.window-texture"
+  ],
+  "duration": {
+    "defaultMs": 650,
+    "minMs": 150,
+    "maxMs": 2000
+  },
+  "renderingCost": "low",
+  "preview": "preview.gif",
+  "parameters": [],
+  "presets": {}
+}

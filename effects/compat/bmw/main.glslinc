@@ -1,0 +1,18 @@
+
+void main() {
+    vec2 extent = max(window_rect.zw, vec2(0.000001));
+    iTexCoord = (v_texcoord - window_rect.xy) / extent;
+    uSize = max(surface_size * extent, vec2(1.0));
+    uSeed = vec2(seed, fract(seed * 13.513 + 0.21));
+
+    // KWin chooses a pointer or random edge. HWS does not expose a reliable
+    // window-local pointer on close snapshots; use a stable seeded edge.
+    int edge = min(3, int(floor(seed * 4.0)));
+    if (edge == 0) uStartPos = vec2(0.0, uSeed.y);
+    else if (edge == 1) uStartPos = vec2(1.0, uSeed.y);
+    else if (edge == 2) uStartPos = vec2(uSeed.y, 0.0);
+    else uStartPos = vec2(uSeed.y, 1.0);
+
+    fragColor = vec4(0.0);
+    bmw_main();
+}

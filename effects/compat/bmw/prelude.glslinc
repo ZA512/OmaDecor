@@ -1,0 +1,36 @@
+#version 320 es
+precision highp float;
+
+in vec2 v_texcoord;
+out vec4 fragColor;
+uniform sampler2D tex;
+uniform float progress;
+uniform float seed;
+uniform vec2 surface_size;
+uniform vec4 window_rect;
+
+// Burn My Windows' source is GPL and stays in the pack. These declarations
+// bridge the HWS uniforms to its open/close fragment contract.
+#define texture2D texture
+#define uProgress progress
+#define uForOpening BMW_OPENING
+vec2 iTexCoord;
+vec2 uSize;
+vec2 uSeed;
+vec2 uStartPos;
+const float uPadding = 0.0;
+const bool uIsFullscreen = false;
+
+vec4 getInputColor(vec2 coords) {
+    if (any(lessThan(coords, vec2(0.0))) || any(greaterThan(coords, vec2(1.0))))
+        return vec4(0.0);
+    vec2 snapshotCoords = window_rect.xy + coords * window_rect.zw;
+    vec4 color = texture(tex, snapshotCoords);
+    if (color.a > 0.0)
+        color.rgb /= color.a;
+    return color;
+}
+
+void setOutputColor(vec4 color) {
+    fragColor = vec4(color.rgb * color.a, color.a);
+}

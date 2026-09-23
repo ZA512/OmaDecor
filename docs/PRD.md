@@ -1193,11 +1193,23 @@ hud/
     HudBottomRight.qml
 
 effects/
+    EffectMetadata.js
+    EffectPack.js
+    EffectPackRegistry.qml
+    EffectValidator.js
     EffectsManager.qml
     EngineDetector.qml
     ShaderCatalog.qml
-    ShaderPackRegistry.qml
-    RuleGenerator.js
+    backends/
+        HyprWindowShadeBackend.qml
+        HyprWindowShadeRuleGenerator.js
+    schema/
+        effect.schema.json
+    packs/native/simple-dissolve/
+        effect.json
+        open.glsl
+        close.glsl
+        LICENSE
 
 effects/shaders/
     simple-fade-open.glsl
@@ -1531,7 +1543,7 @@ omadecor.lua generation
 Apply workflow
 ```
 
-Décision M5 : le catalogue embarqué fournit un fade open/close, un pulse focus et un wobble de mouvement, tous identifiés comme OmaDecor. Un pack externe installé séparément est découvert depuis le répertoire de données utilisateur et ses paires `_open`/`_close` alimentent un sélecteur filtré par événement. `EffectsManager` génère atomiquement `~/.config/hypr/omadecor.lua` avec des règles exclusivement préfixées `omadecor-effects-*`, recharge Hyprland puis évalue ce fichier uniquement sur Apply ou lors de la restauration d'une configuration active. Les overrides applicatifs utilisent des tags spécifiques qui gagnent sur les fallbacks globaux ; `None` utilise un shader pass-through et l’exclusion complète gagne sur tous les overrides conservés.
+Décision M5 : le catalogue embarqué fournit un fade open/close, un pulse focus et un wobble de mouvement, tous identifiés comme OmaDecor. Un pack externe installé séparément est découvert depuis le répertoire de données utilisateur et ses paires `_open`/`_close` alimentent un sélecteur filtré par événement. Chaque événement possède un timing global persistant : les événements ponctuels pilotent leur durée, tandis que les transformations pilotent seulement leur settle tail et restent synchronisées à l'animation Hyprland. Les overrides applicatifs héritent de ce timing. `EffectsManager` génère atomiquement `~/.config/hypr/omadecor.lua` avec des règles exclusivement préfixées `omadecor-effects-*`, recharge Hyprland puis évalue ce fichier uniquement sur Apply ou lors de la restauration d'une configuration active. Les overrides applicatifs utilisent des tags spécifiques qui gagnent sur les fallbacks globaux ; `None` utilise un shader pass-through et l'exclusion complète gagne sur tous les overrides conservés.
 
 Tester au minimum :
 

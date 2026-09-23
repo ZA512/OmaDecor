@@ -1,32 +1,27 @@
 import QtQuick
 import Quickshell
-import Quickshell.Io
-import "RuleGenerator.js" as RuleGenerator
+import "backends" as Backends
 
 Scope {
     id: root
 
     property var config: null
     property var runtime: null
-    property bool pending: false
-    property string applyState: "idle"
-    property string lastError: ""
-    property double lastAppliedAtMs: 0
-    property string pendingText: ""
-    property string stdoutText: ""
-    property string stderrText: ""
-    property bool restoreRequested: false
-    property bool engineReloadAttempted: false
+    property bool applyQueued: false
+    property bool restoreQueued: false
 
-    readonly property string configHome: Quickshell.env("XDG_CONFIG_HOME")
-        || (Quickshell.env("HOME") + "/.config")
-    readonly property string generatedPath: configHome + "/hypr/omadecor.lua"
     readonly property alias catalog: shaderCatalog
-    readonly property alias engineDetector: engineDetector
-    readonly property alias compatibility: compatibility
-    readonly property string status: compatibility.status
-    readonly property bool allowed: compatibility.effectsAllowed
-    readonly property bool active: config && config.effectsEnabled && allowed
+    readonly property alias backend: hyprWindowShadeBackend
+    readonly property var engineDetector: hyprWindowShadeBackend.detector
+    readonly property var compatibility: hyprWindowShadeBackend.compatibility
+    readonly property string status: hyprWindowShadeBackend.status
+    readonly property bool allowed: hyprWindowShadeBackend.allowed
+    readonly property bool active: hyprWindowShadeBackend.active
+    readonly property alias pending: hyprWindowShadeBackend.pending
+    readonly property alias applyState: hyprWindowShadeBackend.applyState
+    readonly property alias lastError: hyprWindowShadeBackend.lastError
+    readonly property alias lastAppliedAtMs: hyprWindowShadeBackend.lastAppliedAtMs
+    readonly property alias generatedPath: hyprWindowShadeBackend.generatedPath
 
     signal applied(bool success)
 
@@ -38,8 +33,12 @@ Scope {
         return shaderCatalog.compatible(eventName)
     }
 
+    function refreshCatalog() {
+        shaderCatalog.refreshExternalPack()
+    }
+
     function effectStatus(eventName, effectId) {
-        return compatibility.effectStatus(effectId, eventName)
+        return hyprWindowShadeBackend.validateEffect(effectId, eventName)
     }
 
     function effectiveEvents() {
@@ -84,228 +83,97 @@ Scope {
             if (choices[index].id === current) currentIndex = index
         var next = choices[(currentIndex + 1) % choices.length]
         config.setEffectEvent(eventName, next.id)
-        root.pending = true
         return next.id
     }
 
-    function testAnyway() {
-        if (!config || compatibility.status !== "UNTESTED" || compatibility.fingerprint === "")
-            return "unavailable"
-        config.setEffectsOverrideFingerprint(compatibility.fingerprint)
-        root.pending = true
-        return "ok"
-    }
-
-    function clearOverride() {
-        if (!config) return "unavailable"
-        config.setEffectsOverrideFingerprint("")
-        root.pending = true
-        return "ok"
-    }
-
     function applyConfiguration() {
-        if (!config || !config.loaded || symlinkCheck.running || mkdirProcess.running
-                || reloadProcess.running || evalProcess.running)
-            return false
-        root.lastError = ""
-        root.stdoutText = ""
-        root.stderrText = ""
-        root.applyState = "writing"
-        root.pendingText = RuleGenerator.generate(
-            root.active,
-            root.effectiveEvents(),
-            shaderCatalog.pathMap(),
-            root.effectiveApplications(),
-            shaderCatalog.passthroughPath()
-        )
-        symlinkCheck.running = true
-        return true
-    }
-
-    function ensureEngineLoaded() {
-        if (!config || !config.effectsEnabled || !engineDetector.installed
-                || engineDetector.loaded || engineReloadProcess.running
-                || root.engineReloadAttempted) return false
-        root.engineReloadAttempted = true
-        engineReloadProcess.running = true
+        if (!config || !config.loaded) return false
+        root.applyQueued = true
+        shaderCatalog.effectPackRegistry.refresh()
         return true
     }
 
     function restoreConfiguration() {
         if (!config || !config.loaded || !config.effectsEnabled) return false
-        root.restoreRequested = true
-        restoreTimer.restart()
+        root.restoreQueued = true
+        shaderCatalog.effectPackRegistry.refresh()
         return true
     }
 
-    function luaLoadExpression() {
-        return "dofile(" + RuleGenerator.luaString(root.generatedPath) + ")"
+    function testAnyway() {
+        return hyprWindowShadeBackend.testAnyway()
+    }
+
+    function clearOverride() {
+        return hyprWindowShadeBackend.clearOverride()
     }
 
     function diagnostics() {
-        return {
-            status: root.status,
-            desiredEnabled: config ? config.effectsEnabled : false,
-            allowed: root.allowed,
-            active: root.active,
-            overrideActive: compatibility.overrideActive,
-            fingerprint: compatibility.fingerprint,
-            engineInstalled: engineDetector.installed,
-            engineLoaded: engineDetector.loaded,
-            packInstalled: shaderCatalog.externalPackInstalled,
-            packPairs: shaderCatalog.externalPairCount,
-            packPath: shaderCatalog.externalPackRoot,
-            pending: root.pending,
-            applyState: root.applyState,
-            generatedPath: root.generatedPath,
-            error: root.lastError,
-            lastAppliedAtMs: root.lastAppliedAtMs
-        }
+        var result = hyprWindowShadeBackend.diagnostics()
+        result.packInstalled = shaderCatalog.externalPackInstalled
+        result.packPairs = shaderCatalog.externalPairCount
+        result.packPath = shaderCatalog.externalPackRoot
+        result.effectPacks = shaderCatalog.effectPackRegistry.diagnostics()
+        return result
     }
 
-    ShaderCatalog { id: shaderCatalog }
-
-    EngineDetector {
-        id: engineDetector
-        runtime: root.runtime
-    }
-
-    CompatibilityManager {
-        id: compatibility
-        runtime: root.runtime
+    ShaderCatalog {
+        id: shaderCatalog
         config: root.config
-        detector: engineDetector
+        backendCapabilities: hyprWindowShadeBackend.capabilities()
     }
 
     Connections {
-        target: root.config
-        function onConfigurationChanged() {
-            root.pending = true
-            if (root.config.effectsEnabled) root.ensureEngineLoaded()
-        }
-    }
-
-    Timer {
-        id: restoreTimer
-        interval: 1500
-        repeat: false
-        onTriggered: {
-            if (root.ensureEngineLoaded()) return
-            root.restoreRequested = false
-            root.applyConfiguration()
-        }
-    }
-
-    Process {
-        id: engineReloadProcess
-        command: ["/usr/bin/hyprpm", "reload", "-n"]
-        // qmllint disable signal-handler-parameters
-        onExited: function() {
-            if (root.runtime) root.runtime.refresh()
-            if (root.restoreRequested) restoreTimer.restart()
-        }
-    }
-
-    Process {
-        id: symlinkCheck
-        command: ["/usr/bin/test", "-L", root.generatedPath]
-        // qmllint disable signal-handler-parameters
-        onExited: function(exitCode) {
-            if (exitCode === 0) {
-                root.applyState = "error"
-                root.lastError = "Refusing to write symlinked omadecor.lua"
-                root.applied(false)
-                return
-            }
-            if (exitCode !== 1) {
-                root.applyState = "error"
-                root.lastError = "Unable to validate omadecor.lua target"
-                root.applied(false)
-                return
-            }
-            mkdirProcess.running = true
-        }
-    }
-
-    Process {
-        id: mkdirProcess
-        command: ["/usr/bin/mkdir", "-p", root.configHome + "/hypr"]
-        // qmllint disable signal-handler-parameters
-        onExited: function(exitCode) {
-            if (exitCode !== 0) {
-                root.applyState = "error"
-                root.lastError = "Unable to create Hyprland config directory"
-                root.applied(false)
-                return
-            }
-            if (String(generatedFile.text()) === root.pendingText) {
-                root.applyState = "reloading"
-                reloadProcess.running = true
-            } else {
-                generatedFile.setText(root.pendingText)
+        target: shaderCatalog.effectPackRegistry
+        function onRefreshed() {
+            if (shaderCatalog.effectPackRegistry.refreshPending) return
+            if (root.applyQueued) {
+                Qt.callLater(function() {
+                    if (root.applyQueued && hyprWindowShadeBackend.applyConfiguration()) {
+                        root.applyQueued = false
+                        root.restoreQueued = false
+                    }
+                })
+            } else if (root.restoreQueued) {
+                Qt.callLater(function() {
+                    if (root.restoreQueued && hyprWindowShadeBackend.restoreConfiguration())
+                        root.restoreQueued = false
+                })
             }
         }
     }
 
-    FileView {
-        id: generatedFile
-        path: root.generatedPath
-        atomicWrites: true
-        printErrors: false
-        onSaved: {
-            root.applyState = "reloading"
-            reloadProcess.running = true
-        }
+    Backends.HyprWindowShadeBackend {
+        id: hyprWindowShadeBackend
+        config: root.config
+        runtime: root.runtime
+        catalog: shaderCatalog
+        events: root.effectiveEvents()
+        applications: root.effectiveApplications()
     }
 
-    Process {
-        id: reloadProcess
-        command: ["/usr/bin/hyprctl", "reload"]
-        stdout: StdioCollector {
-            waitForEnd: true
-            onStreamFinished: root.stdoutText = String(text || "").trim()
-        }
-        stderr: StdioCollector {
-            waitForEnd: true
-            onStreamFinished: root.stderrText = String(text || "").trim()
-        }
-        // qmllint disable signal-handler-parameters
-        onExited: function(exitCode) {
-            var success = exitCode === 0 && root.stdoutText.toLowerCase().indexOf("error") === -1
-            if (!success) {
-                root.lastAppliedAtMs = Date.now()
-                root.applyState = "error"
-                root.lastError = root.stderrText || root.stdoutText || "Hyprland reload failed"
-                root.applied(false)
-                return
-            }
-            root.applyState = "evaluating"
-            root.stdoutText = ""
-            root.stderrText = ""
-            evalProcess.command = ["/usr/bin/hyprctl", "eval", root.luaLoadExpression()]
-            evalProcess.running = true
-        }
-    }
-
-    Process {
-        id: evalProcess
-        stdout: StdioCollector {
-            waitForEnd: true
-            onStreamFinished: root.stdoutText = String(text || "").trim()
-        }
-        stderr: StdioCollector {
-            waitForEnd: true
-            onStreamFinished: root.stderrText = String(text || "").trim()
-        }
-        // qmllint disable signal-handler-parameters
-        onExited: function(exitCode) {
-            var success = exitCode === 0 && root.stdoutText.toLowerCase().indexOf("error") === -1
-            root.lastAppliedAtMs = Date.now()
-            root.applyState = success ? "applied" : "error"
-            root.lastError = success ? "" : (root.stderrText || root.stdoutText || "Hyprland rejected generated effect rules")
-            if (success) root.pending = false
+    Connections {
+        target: hyprWindowShadeBackend
+        function onApplied(success) {
             root.applied(success)
-            if (root.runtime) root.runtime.refresh()
+            if (root.applyQueued && shaderCatalog.effectPackRegistry.state !== "scanning")
+                Qt.callLater(function() {
+                    if (root.applyQueued) shaderCatalog.effectPackRegistry.refresh()
+                })
+            else if (root.restoreQueued && !root.applyQueued)
+                Qt.callLater(function() {
+                    if (root.restoreQueued && hyprWindowShadeBackend.restoreConfiguration())
+                        root.restoreQueued = false
+                })
+        }
+    }
+
+    Connections {
+        target: hyprWindowShadeBackend.compatibility
+        function onEffectsAllowedChanged() {
+            if (root.config && root.config.loaded && root.config.effectsEnabled
+                    && !hyprWindowShadeBackend.allowed)
+                root.applyConfiguration()
         }
     }
 }

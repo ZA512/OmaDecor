@@ -1,0 +1,15 @@
+Incinerate and common.glsl are unmodified source files from Burn My Windows
+at revision 9af4eb1f27244985e9e4fb3e7e4067a4dd6598e4:
+https://github.com/Schneegans/Burn-My-Windows
+
+Copyright Simon Schneegans. The common shader also credits MIT noise routines
+by David Hoskins, Inigo Quilez, and Nikita Miropolskiy. Original notices remain
+inside the source files. The complete GPL-3.0-or-later license is in LICENSE.
+
+OmaDecor contributors wrote the compatibility wrapper and metadata. PlasmaZones
+and hyprfx were studied as independent porting references; no code from them
+is included in this pack.
+
+The preview GIF was rendered offscreen from the compiled GPL-3.0-or-later
+Incinerate shader on a synthetic window by OmaDecor contributors. It does not
+record a user application or validate the effect on other GPUs or monitors.

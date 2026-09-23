@@ -48,6 +48,21 @@ Scope {
         unfocus: "none",
         urgent: "none"
     })
+    property var effectsTimings: ({
+        open: 0.65,
+        close: 0.8,
+        move: 0.45,
+        resize: 0.35,
+        workspace: 0.25,
+        fullscreenEnter: 0.25,
+        fullscreenExit: 0.25,
+        float: 0.35,
+        tile: 0.3,
+        focus: 0.3,
+        unfocus: 0.25,
+        urgent: 0.6
+    })
+    property var effectsPackParameters: ({})
     property string effectsOverrideFingerprint: ""
     property var applications: []
     property var hudClassExclusions: []
@@ -55,6 +70,9 @@ Scope {
 
     property string pendingWrite: ""
     property bool writeQueued: false
+    property bool saveInFlight: false
+    property int submittedRevision: -1
+    property var recentWrites: []
 
     signal configurationLoaded()
     signal configurationChanged()
@@ -100,6 +118,21 @@ Scope {
                     unfocus: "none",
                     urgent: "none"
                 },
+                timings: {
+                    open: 0.65,
+                    close: 0.8,
+                    move: 0.45,
+                    resize: 0.35,
+                    workspace: 0.25,
+                    fullscreenEnter: 0.25,
+                    fullscreenExit: 0.25,
+                    float: 0.35,
+                    tile: 0.3,
+                    focus: 0.3,
+                    unfocus: 0.25,
+                    urgent: 0.6
+                },
+                parameters: {},
                 overrideFingerprint: ""
             },
             applications: []
@@ -174,7 +207,9 @@ Scope {
 
     function normalizedEffectId(value, fallback) {
         var effectId = String(value || "")
-        return /^[a-z0-9][a-z0-9._-]{0,127}$/.test(effectId) ? effectId : fallback
+        var builtin = /^[a-z0-9][a-z0-9._-]{0,127}$/
+        var packEvent = /^[a-z0-9][a-z0-9._-]{0,63}\/[a-z0-9][a-z0-9._-]{0,63}\.(open|close|move|resize|workspace|focus|unfocus|urgent|float|tile|fullscreen-enter|fullscreen-exit)$/
+        return builtin.test(effectId) || packEvent.test(effectId) ? effectId : fallback
     }
 
     function effectCompatible(eventName, effectId) {
@@ -194,6 +229,57 @@ Scope {
             var name = names[index]
             var effectId = root.normalizedEffectId(incoming[name], defaults[name])
             result[name] = root.effectCompatible(name, effectId) ? effectId : defaults[name]
+        }
+        return result
+    }
+
+    function effectTimingDefinition(eventName) {
+        var transforms = ["move", "resize", "workspace", "fullscreenEnter",
+            "fullscreenExit", "float", "tile"]
+        if (transforms.indexOf(String(eventName || "")) !== -1)
+            return { label: "Settle", minimum: 0, maximum: 1.2, step: 0.05 }
+        return { label: "Duration", minimum: 0.1, maximum: 2, step: 0.05 }
+    }
+
+    function normalizedEffectTimings(value) {
+        var incoming = root.objectValue(value, {})
+        var defaults = root.defaults().effects.timings
+        var result = ({})
+        var names = ["open", "close", "move", "resize", "workspace", "fullscreenEnter",
+            "fullscreenExit", "float", "tile", "focus", "unfocus", "urgent"]
+        for (var index = 0; index < names.length; index++) {
+            var name = names[index]
+            var definition = root.effectTimingDefinition(name)
+            var clean = root.clampedNumber(
+                incoming[name], defaults[name], definition.minimum, definition.maximum)
+            result[name] = Math.round(
+                Math.round(clean / definition.step) * definition.step * 100) / 100
+        }
+        return result
+    }
+
+    function normalizedEffectPackParameters(value) {
+        var incoming = root.objectValue(value, {})
+        var result = ({})
+        var packIds = Object.keys(incoming).sort().slice(0, 32)
+        for (var packIndex = 0; packIndex < packIds.length; packIndex++) {
+            var packId = packIds[packIndex]
+            if (!/^[a-z0-9][a-z0-9._-]{0,63}\/[a-z0-9][a-z0-9._-]{0,63}$/.test(packId))
+                continue
+            var source = root.objectValue(incoming[packId], {})
+            var values = ({})
+            var names = Object.keys(source).sort().slice(0, 64)
+            for (var index = 0; index < names.length; index++) {
+                var name = names[index]
+                if (!/^[a-z][A-Za-z0-9-]{0,63}$/.test(name)) continue
+                var item = source[name]
+                if (typeof item === "boolean") values[name] = item
+                else if (typeof item === "number" && isFinite(item)
+                        && item >= -1000000 && item <= 1000000) values[name] = item
+                else if (typeof item === "string" && item.length <= 128
+                        && !/[\n\r\0]/.test(item)) values[name] = item
+            }
+            if (Object.keys(values).length > 0) result[packId] = values
         }
         return result
     }
@@ -288,6 +374,8 @@ Scope {
             effects: {
                 enabled: effects.enabled === true,
                 events: root.normalizedEffectEvents(effects.events),
+                timings: root.normalizedEffectTimings(effects.timings),
+                parameters: root.normalizedEffectPackParameters(effects.parameters),
                 overrideFingerprint: root.normalizedText(effects.overrideFingerprint, 512)
             },
             applications: root.normalizedApplications(data.applications)
@@ -314,6 +402,8 @@ Scope {
         root.hudScope = clean.hud.scope
         root.effectsEnabled = clean.effects.enabled
         root.effectsEvents = clean.effects.events
+        root.effectsTimings = clean.effects.timings
+        root.effectsPackParameters = clean.effects.parameters
         root.effectsOverrideFingerprint = clean.effects.overrideFingerprint
         root.applications = clean.applications
         root.refreshApplicationExclusions()
@@ -348,6 +438,8 @@ Scope {
             effects: {
                 enabled: root.effectsEnabled,
                 events: root.effectsEvents,
+                timings: root.effectsTimings,
+                parameters: root.effectsPackParameters,
                 overrideFingerprint: root.effectsOverrideFingerprint
             },
             applications: root.applications
@@ -397,7 +489,7 @@ Scope {
 
     function persist() {
         root.pendingWrite = JSON.stringify(root.snapshot(), null, 2) + "\n"
-        if (symlinkCheck.running || mkdirProcess.running) {
+        if (root.saveInFlight || symlinkCheck.running || mkdirProcess.running) {
             root.writeQueued = true
             return
         }
@@ -409,6 +501,20 @@ Scope {
         if (!root.writeQueued) return
         root.writeQueued = false
         root.persist()
+    }
+
+    function isLocalEcho(content) {
+        var now = Date.now()
+        var recent = []
+        var match = false
+        for (var index = 0; index < root.recentWrites.length; index++) {
+            var entry = root.recentWrites[index]
+            if (entry.expiresAt < now) continue
+            recent.push(entry)
+            if (entry.text === content) match = true
+        }
+        root.recentWrites = recent
+        return match
     }
 
     function setModuleEnabled(moduleName, enabled) {
@@ -500,6 +606,65 @@ Scope {
         for (var key in root.effectsEvents) next[key] = root.effectsEvents[key]
         next[name] = cleanId
         root.effectsEvents = next
+        root.revision += 1
+        root.configurationChanged()
+        root.scheduleSave()
+        return true
+    }
+
+    function setEffectTiming(eventName, value) {
+        var name = String(eventName || "")
+        if (root.effectsTimings[name] === undefined) return false
+        var definition = root.effectTimingDefinition(name)
+        var clean = root.clampedNumber(
+            value, root.effectsTimings[name], definition.minimum, definition.maximum)
+        clean = Math.round(Math.round(clean / definition.step) * definition.step * 100) / 100
+        var next = ({})
+        for (var key in root.effectsTimings) next[key] = root.effectsTimings[key]
+        next[name] = clean
+        root.effectsTimings = next
+        root.revision += 1
+        root.configurationChanged()
+        root.scheduleSave()
+        return true
+    }
+
+    function setEffectPackParameter(packId, name, value) {
+        var values = ({})
+        values[name] = value
+        return root.setEffectPackParameters(packId, values)
+    }
+
+    function setEffectPackParameters(packId, values) {
+        if (!values || typeof values !== "object" || Array.isArray(values)) return false
+        var next = ({})
+        for (var existingPack in root.effectsPackParameters)
+            next[existingPack] = root.effectsPackParameters[existingPack]
+        var parameters = ({})
+        var current = root.effectsPackParameters[packId] || ({})
+        for (var existingName in current) parameters[existingName] = current[existingName]
+        var names = Object.keys(values)
+        if (names.length === 0 || names.length > 64) return false
+        for (var index = 0; index < names.length; index++)
+            parameters[names[index]] = values[names[index]]
+        next[packId] = parameters
+        var clean = root.normalizedEffectPackParameters(next)
+        if (!clean[packId]) return false
+        for (var checkIndex = 0; checkIndex < names.length; checkIndex++)
+            if (clean[packId][names[checkIndex]] === undefined) return false
+        root.effectsPackParameters = clean
+        root.revision += 1
+        root.configurationChanged()
+        root.scheduleSave()
+        return true
+    }
+
+    function resetEffectPackParameters(packId) {
+        if (root.effectsPackParameters[packId] === undefined) return true
+        var next = ({})
+        for (var existingPack in root.effectsPackParameters)
+            if (existingPack !== packId) next[existingPack] = root.effectsPackParameters[existingPack]
+        root.effectsPackParameters = next
         root.revision += 1
         root.configurationChanged()
         root.scheduleSave()
@@ -727,6 +892,10 @@ Scope {
                 root.finishWriteCycle()
                 return
             }
+            root.submittedRevision = root.revision
+            root.recentWrites = [{ text: root.pendingWrite,
+                expiresAt: Date.now() + 3000 }].concat(root.recentWrites).slice(0, 3)
+            root.saveInFlight = true
             configFile.setText(root.pendingWrite)
             root.pendingWrite = ""
             root.finishWriteCycle()
@@ -739,11 +908,23 @@ Scope {
         watchChanges: true
         atomicWrites: true
         printErrors: false
-        onLoaded: root.loadText(text(), false)
+        onLoaded: {
+            var content = String(text())
+            if (root.loaded && root.isLocalEcho(content)) return
+            root.loadText(content, false)
+        }
         onLoadFailed: root.loadText("", true)
         onFileChanged: reload()
-        onSaved: reload()
+        onSaved: {
+            root.saveInFlight = false
+            if (root.revision !== root.submittedRevision) {
+                root.writeQueued = true
+                saveTimer.stop()
+            } else if (root.writeQueued) root.writeQueued = false
+            root.finishWriteCycle()
+        }
         onSaveFailed: function() {
+            root.saveInFlight = false
             root.healthy = false
             root.lastError = "Unable to save config.json"
         }

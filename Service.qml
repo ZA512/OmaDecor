@@ -5,6 +5,7 @@ import Quickshell.Io
 import "core"
 import "decorations"
 import "effects"
+import "effects/EffectValidator.js" as EffectValidator
 import "hud"
 
 Scope {
@@ -26,6 +27,8 @@ Scope {
     readonly property bool hudEnabled: configStore.hudEnabled
     readonly property bool effectsEnabled: configStore.effectsEnabled
     readonly property var effectsEvents: configStore.effectsEvents
+    readonly property var effectsTimings: configStore.effectsTimings
+    readonly property var effectsPackParameters: configStore.effectsPackParameters
     readonly property string effectsCompatibilityStatus: effectsManager.status
     readonly property bool effectsAllowed: effectsManager.allowed
     readonly property bool effectsActive: effectsManager.active
@@ -104,6 +107,7 @@ Scope {
         var name = String(moduleName || "")
         var enabled = root.boolValue(value)
         if (!configStore.setModuleEnabled(name, enabled)) return "unknown-module"
+        if (name === "effects") effectsManager.applyConfiguration()
         return enabled ? "enabled" : "disabled"
     }
 
@@ -231,6 +235,93 @@ Scope {
     function setEffectEvent(eventName, effectId) {
         if (!effectsManager.catalog.isCompatible(eventName, effectId)) return "invalid"
         return configStore.setEffectEvent(eventName, effectId) ? "ok" : "invalid"
+    }
+
+    function effectTimingDefinition(eventName) {
+        return configStore.effectTimingDefinition(eventName)
+    }
+
+    function setEffectTiming(eventName, value) {
+        return configStore.setEffectTiming(eventName, value) ? "ok" : "invalid"
+    }
+
+    function effectDetails(effectId) {
+        return effectsManager.catalog.findEffect(String(effectId || ""))
+    }
+
+    function effectParameterDefinitions(effectId) {
+        var entry = root.effectDetails(effectId)
+        if (!entry || entry.sourceFormat !== "bmw" || !Array.isArray(entry.parameters)) return []
+        var saved = root.effectsPackParameters[entry.effectId] || ({})
+        var result = []
+        for (var index = 0; index < entry.parameters.length; index++) {
+            var definition = entry.parameters[index]
+            result.push({
+                id: definition.id, name: definition.name, type: definition.type,
+                min: definition.min, max: definition.max, step: definition.step,
+                options: definition.options || [],
+                value: saved[definition.id] !== undefined
+                    ? saved[definition.id] : definition.default
+            })
+        }
+        return result
+    }
+
+    function effectPresets(effectId) {
+        var entry = root.effectDetails(effectId)
+        return entry && entry.sourceFormat === "bmw"
+            ? Object.keys(entry.presets || {}).sort() : []
+    }
+
+    function validEffectParameter(definition, value) {
+        if (!EffectValidator.validateParameterValue(definition, value)) return false
+        if (definition.type === "color" && !/^#[0-9A-Fa-f]{6}$/.test(value))
+            return false
+        if ((definition.type === "float" || definition.type === "int")
+                && Math.abs(value - Math.round(value * 10000) / 10000) > 0.00000001)
+            return false
+        return true
+    }
+
+    function setEffectParameter(effectId, name, value) {
+        var entry = root.effectDetails(effectId)
+        if (!entry || entry.sourceFormat !== "bmw") return "unsupported"
+        for (var index = 0; index < entry.parameters.length; index++) {
+            var definition = entry.parameters[index]
+            if (definition.id !== name) continue
+            if (!root.validEffectParameter(definition, value)) return "invalid"
+            return configStore.setEffectPackParameter(entry.effectId, name, value)
+                ? "ok" : "invalid"
+        }
+        return "invalid"
+    }
+
+    function applyEffectPreset(effectId, presetId) {
+        var entry = root.effectDetails(effectId)
+        if (!entry || entry.sourceFormat !== "bmw") return "unsupported"
+        var values = entry.presets
+            && Object.prototype.hasOwnProperty.call(entry.presets, presetId)
+            ? entry.presets[presetId] : null
+        if (!values || typeof values !== "object") return "invalid"
+        for (var name in values) {
+            var found = false
+            for (var index = 0; index < entry.parameters.length; index++) {
+                var definition = entry.parameters[index]
+                if (definition.id !== name) continue
+                if (!root.validEffectParameter(definition, values[name])) return "invalid"
+                found = true
+                break
+            }
+            if (!found) return "invalid"
+        }
+        return configStore.setEffectPackParameters(entry.effectId, values)
+            ? "ok" : "invalid"
+    }
+
+    function resetEffectParameters(effectId) {
+        var entry = root.effectDetails(effectId)
+        if (!entry || entry.sourceFormat !== "bmw") return "unsupported"
+        return configStore.resetEffectPackParameters(entry.effectId) ? "ok" : "invalid"
     }
 
     function compatibleEffects(eventName) {
@@ -400,6 +491,8 @@ Scope {
                     active: effectsManager.active,
                     overrideActive: effectsManager.compatibility.overrideActive,
                     events: configStore.effectsEvents,
+                    timings: configStore.effectsTimings,
+                    parameters: configStore.effectsPackParameters,
                     manager: effectsManager.diagnostics()
                 }
             },
@@ -443,6 +536,7 @@ Scope {
     }
 
     function refresh() {
+        effectsManager.refreshCatalog()
         hyprlandState.refresh("ipc-refresh")
         runtimeDiagnostics.refresh()
         return "ok"
@@ -500,6 +594,26 @@ Scope {
 
         function setEffectEvent(eventName: string, effectId: string): string {
             return root.setEffectEvent(eventName, effectId)
+        }
+
+        function setEffectTiming(eventName: string, value: real): string {
+            return root.setEffectTiming(eventName, value)
+        }
+
+        function setEffectParameter(effectId: string, name: string, valueJson: string): string {
+            try {
+                return root.setEffectParameter(effectId, name, JSON.parse(valueJson))
+            } catch (error) {
+                return "invalid"
+            }
+        }
+
+        function resetEffectParameters(effectId: string): string {
+            return root.resetEffectParameters(effectId)
+        }
+
+        function applyEffectPreset(effectId: string, presetId: string): string {
+            return root.applyEffectPreset(effectId, presetId)
         }
 
         function installEffects(): string {

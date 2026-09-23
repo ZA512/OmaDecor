@@ -4,6 +4,8 @@ import QtQuick
 import Quickshell
 import Quickshell.Wayland
 import qs.Commons as Commons
+import qs.Ui as Ui
+import "effects/EffectSearch.js" as EffectSearch
 
 Item {
     id: root
@@ -20,6 +22,8 @@ Item {
     property string selectedApplicationClass: ""
     property string effectPickerEvent: ""
     property string effectPickerApplicationClass: ""
+    property string effectPickerQuery: ""
+    property string effectDetailsId: ""
 
     readonly property color panelColor: Commons.Color.popups.background
     readonly property color foregroundColor: Commons.Color.popups.text
@@ -124,11 +128,14 @@ Item {
     function openEffectPicker(eventName, appClass) {
         root.effectPickerEvent = String(eventName || "")
         root.effectPickerApplicationClass = String(appClass || "")
+        effectSearchInput.text = ""
     }
 
     function closeEffectPicker() {
         root.effectPickerEvent = ""
         root.effectPickerApplicationClass = ""
+        effectSearchInput.text = ""
+        root.effectDetailsId = ""
     }
 
     function effectPickerChoices() {
@@ -139,6 +146,14 @@ Item {
             pack: "Application override", description: "Use the global event selection."
         })
         return result
+    }
+
+    function filteredEffectPickerChoices() {
+        return EffectSearch.filterEffects(root.effectPickerChoices(), root.effectPickerQuery)
+    }
+
+    function effectPickerGroups() {
+        return EffectSearch.groupEffects(root.filteredEffectPickerChoices())
     }
 
     function currentPickerEffect() {
@@ -157,6 +172,10 @@ Item {
                 root.effectPickerApplicationClass, root.effectPickerEvent, effectId)
         root.actionMessage = result === "ok" ? "Effect selected — click Apply" : result
         root.closeEffectPicker()
+    }
+
+    function openEffectDetails(effectId) {
+        root.effectDetailsId = String(effectId || "")
     }
 
     component ActionButton: Rectangle {
@@ -391,6 +410,145 @@ Item {
         }
     }
 
+    component EffectParameterRow: Rectangle {
+        id: effectParameterRow
+
+        required property var modelData
+        required property string effectId
+        readonly property var definition: modelData
+        readonly property bool isNumber: definition.type === "float" || definition.type === "int"
+
+        function save(value) {
+            if (!root.service) return
+            var result = root.service.setEffectParameter(
+                effectParameterRow.effectId, effectParameterRow.definition.id, value)
+            root.actionMessage = result === "ok" ? "Parameter updated — click Apply" : result
+        }
+
+        width: parent ? parent.width : 0
+        height: 52
+        radius: 7
+        color: Commons.Color.background
+        border.color: Commons.Color.popups.border
+
+        Column {
+            anchors.left: parent.left
+            anchors.leftMargin: 10
+            anchors.right: parameterControls.left
+            anchors.rightMargin: 8
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: 2
+            Text {
+                width: parent.width
+                text: effectParameterRow.definition.name
+                color: root.foregroundColor
+                font.pixelSize: 12
+                font.bold: true
+                elide: Text.ElideRight
+            }
+            Text {
+                width: parent.width
+                text: effectParameterRow.definition.id
+                color: root.mutedColor
+                font.pixelSize: 10
+                elide: Text.ElideRight
+            }
+        }
+
+        Row {
+            id: parameterControls
+            anchors.right: parent.right
+            anchors.rightMargin: 8
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: 6
+
+            Ui.PanelSlider {
+                id: effectParameterSlider
+                visible: effectParameterRow.isNumber
+                width: 155
+                height: 28
+                minimum: Number(effectParameterRow.definition.min !== undefined
+                    ? effectParameterRow.definition.min : 0)
+                maximum: Number(effectParameterRow.definition.max !== undefined
+                    ? effectParameterRow.definition.max : 1)
+                step: Number(effectParameterRow.definition.step !== undefined
+                    ? effectParameterRow.definition.step : 0.1)
+                value: Number(effectParameterRow.definition.value)
+                trackColor: Commons.Color.popups.border
+                fillColor: root.accentColor
+                knobColor: root.accentColor
+                tickColor: Commons.Color.background
+                onReleased: function(value) {
+                    var clean = effectParameterRow.definition.type === "int"
+                        ? Math.round(value) : Math.round(value * 10000) / 10000
+                    effectParameterRow.save(clean)
+                }
+            }
+            Text {
+                visible: effectParameterRow.isNumber
+                anchors.verticalCenter: parent.verticalCenter
+                width: 46
+                horizontalAlignment: Text.AlignRight
+                text: String(effectParameterSlider.dragging
+                    ? Math.round(effectParameterSlider.liveValue * 100) / 100
+                    : effectParameterRow.definition.value)
+                color: root.foregroundColor
+                font.pixelSize: 11
+            }
+            Rectangle {
+                visible: effectParameterRow.definition.type === "color"
+                width: 30
+                height: 30
+                radius: 6
+                color: effectParameterRow.definition.type === "color"
+                    ? effectParameterRow.definition.value : "transparent"
+                border.color: root.foregroundColor
+            }
+            Rectangle {
+                visible: effectParameterRow.definition.type === "color"
+                width: 130
+                height: 32
+                radius: 6
+                color: root.panelColor
+                border.color: effectColorInput.activeFocus
+                    ? root.accentColor : Commons.Color.popups.border
+                TextInput {
+                    id: effectColorInput
+                    anchors.fill: parent
+                    anchors.margins: 8
+                    text: effectParameterRow.definition.type === "color"
+                        ? String(effectParameterRow.definition.value) : ""
+                    color: root.foregroundColor
+                    selectionColor: root.accentColor
+                    font.pixelSize: 12
+                    clip: true
+                    onEditingFinished: {
+                        effectParameterRow.save(text)
+                        if (root.actionMessage !== "Parameter updated — click Apply")
+                            text = String(effectParameterRow.definition.value)
+                    }
+                }
+            }
+            TogglePill {
+                visible: effectParameterRow.definition.type === "boolean"
+                label: ""
+                checked: effectParameterRow.definition.value === true
+                onToggled: effectParameterRow.save(!checked)
+            }
+            ActionButton {
+                visible: effectParameterRow.definition.type === "enum"
+                label: String(effectParameterRow.definition.value)
+                buttonWidth: 170
+                onClicked: {
+                    var options = effectParameterRow.definition.options || []
+                    if (options.length === 0) return
+                    var current = options.indexOf(effectParameterRow.definition.value)
+                    effectParameterRow.save(options[(current + 1) % options.length])
+                }
+            }
+        }
+    }
+
     component ModuleRow: Rectangle {
         id: moduleRow
 
@@ -444,9 +602,14 @@ Item {
             ? String(root.service.effectsEvents[eventName] || "none") : "none"
         readonly property string compatibilityState: root.service
             ? root.service.effectCompatibilityState(eventName, effectId) : "UNTESTED"
+        readonly property var timingDefinition: root.service
+            ? root.service.effectTimingDefinition(eventName)
+            : ({ label: "Duration", minimum: 0.1, maximum: 2, step: 0.05 })
+        readonly property real timing: root.service
+            ? Number(root.service.effectsTimings[eventName] || 0) : 0
 
         width: effectsGrid.width > 0 ? (effectsGrid.width - 8) / 2 : 0
-        height: 42
+        height: 70
         radius: 7
         color: Commons.Color.background
         border.color: Commons.Color.popups.border
@@ -454,7 +617,8 @@ Item {
         Text {
             anchors.left: parent.left
             anchors.leftMargin: 10
-            anchors.verticalCenter: parent.verticalCenter
+            anchors.top: parent.top
+            anchors.topMargin: 11
             text: effectRow.title
             color: root.foregroundColor
             font.pixelSize: 12
@@ -464,13 +628,62 @@ Item {
         ActionButton {
             anchors.right: parent.right
             anchors.rightMargin: 6
-            anchors.verticalCenter: parent.verticalCenter
+            anchors.top: parent.top
+            anchors.topMargin: 4
             label: (effectRow.compatibilityState === "BROKEN" ? "✕ "
                 : (effectRow.compatibilityState === "DEGRADED" ? "⚠ " : ""))
                 + (root.service ? root.service.effectDisplayName(effectRow.effectId) : "None")
             buttonWidth: 118
             selected: effectRow.effectId !== "none"
             onClicked: root.openEffectPicker(effectRow.eventName, "")
+        }
+
+        Text {
+            id: timingLabel
+            anchors.left: parent.left
+            anchors.leftMargin: 10
+            anchors.bottom: parent.bottom
+            anchors.bottomMargin: 8
+            width: 48
+            text: effectRow.timingDefinition.label
+            color: root.mutedColor
+            font.pixelSize: 9
+        }
+
+        Ui.PanelSlider {
+            id: timingSlider
+            anchors.left: timingLabel.right
+            anchors.leftMargin: 5
+            anchors.right: timingValue.left
+            anchors.rightMargin: 7
+            anchors.verticalCenter: timingLabel.verticalCenter
+            height: 22
+            minimum: Number(effectRow.timingDefinition.minimum)
+            maximum: Number(effectRow.timingDefinition.maximum)
+            step: Number(effectRow.timingDefinition.step)
+            value: effectRow.timing
+            trackColor: Commons.Color.popups.border
+            fillColor: root.accentColor
+            knobColor: root.accentColor
+            tickColor: Commons.Color.background
+            opacity: effectRow.effectId === "none" ? 0.55 : 1
+            onReleased: function(value) {
+                if (!root.service) return
+                var result = root.service.setEffectTiming(effectRow.eventName, value)
+                root.actionMessage = result === "ok" ? "Timing updated — click Apply" : result
+            }
+        }
+
+        Text {
+            id: timingValue
+            anchors.right: parent.right
+            anchors.rightMargin: 8
+            anchors.verticalCenter: timingLabel.verticalCenter
+            width: 42
+            horizontalAlignment: Text.AlignRight
+            text: (timingSlider.dragging ? timingSlider.liveValue : effectRow.timing).toFixed(2) + " s"
+            color: root.foregroundColor
+            font.pixelSize: 9
         }
     }
 
@@ -630,10 +843,17 @@ Item {
                             }
                         }
 
-                        Column {
+                        Flickable {
                             anchors.fill: parent
-                            spacing: 9
                             visible: root.currentPage === "effects"
+                            contentWidth: width
+                            contentHeight: effectsContent.height
+                            clip: true
+
+                            Column {
+                                id: effectsContent
+                                width: parent.width
+                                spacing: 9
 
                             Row {
                                 width: parent.width
@@ -659,6 +879,15 @@ Item {
                                 color: root.service && root.service.effectsAllowed
                                     ? root.accentColor : Commons.Color.urgent
                                 font.pixelSize: 12
+                                wrapMode: Text.Wrap
+                            }
+
+                            Text {
+                                width: parent.width
+                                text: "Duration controls Open, Close, Focus, Unfocus and Urgent. "
+                                    + "Settle controls only the easing tail after a transform; the main movement stays synchronized with Hyprland."
+                                color: root.mutedColor
+                                font.pixelSize: 10
                                 wrapMode: Text.Wrap
                             }
 
@@ -758,6 +987,7 @@ Item {
                                     ? root.mutedColor : Commons.Color.urgent
                                 font.pixelSize: 11
                                 wrapMode: Text.Wrap
+                            }
                             }
                         }
 
@@ -1286,7 +1516,10 @@ Item {
                                                 font.bold: true
                                             }
                                             Text {
-                                                text: root.effectPickerChoices().length + " compatible choice(s)"
+                                                text: root.effectPickerQuery.trim() === ""
+                                                    ? root.effectPickerChoices().length + " compatible choice(s)"
+                                                    : root.filteredEffectPickerChoices().length + " of "
+                                                        + root.effectPickerChoices().length + " choices"
                                                 color: root.mutedColor
                                                 font.pixelSize: 11
                                             }
@@ -1299,10 +1532,55 @@ Item {
                                         }
                                     }
 
+                                    Row {
+                                        width: parent.width
+                                        spacing: 6
+
+                                        Rectangle {
+                                            width: parent.width - (clearEffectSearch.visible ? 70 : 0)
+                                            height: 34
+                                            radius: 7
+                                            color: Commons.Color.background
+                                            border.color: Commons.Color.popups.border
+
+                                            Text {
+                                                anchors.left: parent.left
+                                                anchors.leftMargin: 10
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                text: "Search name, project, author, ID…"
+                                                color: root.mutedColor
+                                                font.pixelSize: 12
+                                                visible: effectSearchInput.text === ""
+                                            }
+                                            TextInput {
+                                                id: effectSearchInput
+                                                anchors.fill: parent
+                                                anchors.leftMargin: 10
+                                                anchors.rightMargin: 10
+                                                verticalAlignment: TextInput.AlignVCenter
+                                                color: root.foregroundColor
+                                                font.pixelSize: 12
+                                                clip: true
+                                                onTextChanged: root.effectPickerQuery = text
+                                                Keys.onEscapePressed: root.closeEffectPicker()
+                                            }
+                                        }
+                                        ActionButton {
+                                            id: clearEffectSearch
+                                            label: "Clear"
+                                            buttonWidth: 64
+                                            visible: root.effectPickerQuery !== ""
+                                            onClicked: {
+                                                effectSearchInput.text = ""
+                                                effectSearchInput.forceActiveFocus()
+                                            }
+                                        }
+                                    }
+
                                     Flickable {
                                         id: effectPickerList
                                         width: parent.width
-                                        height: parent.height - 58
+                                        height: Math.max(80, parent.height - y)
                                         contentWidth: width
                                         contentHeight: effectPickerColumn.height
                                         clip: true
@@ -1312,66 +1590,350 @@ Item {
                                             width: effectPickerList.width
                                             spacing: 5
 
+                                            Text {
+                                                width: parent.width
+                                                height: 40
+                                                text: "No effects match this search."
+                                                color: root.mutedColor
+                                                font.pixelSize: 12
+                                                verticalAlignment: Text.AlignVCenter
+                                                visible: root.filteredEffectPickerChoices().length === 0
+                                            }
+
                                             Repeater {
-                                                model: root.effectPickerChoices()
-                                                delegate: Rectangle {
-                                                    id: effectChoice
+                                                model: root.effectPickerGroups()
+                                                delegate: Column {
+                                                    id: effectGroup
                                                     required property var modelData
-                                                    readonly property bool selected:
-                                                        modelData.id === root.currentPickerEffect()
 
                                                     width: effectPickerColumn.width
-                                                    height: 54
-                                                    radius: 7
-                                                    color: selected
-                                                        ? Commons.Util.alpha(root.accentColor, 0.22)
-                                                        : Commons.Color.background
-                                                    border.color: selected
-                                                        ? root.accentColor : Commons.Color.popups.border
-
-                                                    Column {
-                                                        anchors.left: parent.left
-                                                        anchors.leftMargin: 10
-                                                        anchors.right: choiceState.left
-                                                        anchors.rightMargin: 8
-                                                        anchors.verticalCenter: parent.verticalCenter
-                                                        spacing: 3
-                                                        Text {
-                                                            width: parent.width
-                                                            text: effectChoice.modelData.name
-                                                            color: root.foregroundColor
-                                                            font.pixelSize: 12
-                                                            font.bold: true
-                                                            elide: Text.ElideRight
-                                                        }
-                                                        Text {
-                                                            width: parent.width
-                                                            text: String(effectChoice.modelData.pack || effectChoice.modelData.source || "")
-                                                                + (effectChoice.modelData.description
-                                                                    ? " · " + effectChoice.modelData.description : "")
-                                                            color: root.mutedColor
-                                                            font.pixelSize: 10
-                                                            elide: Text.ElideRight
-                                                        }
-                                                    }
+                                                    spacing: 5
 
                                                     Text {
-                                                        id: choiceState
-                                                        anchors.right: parent.right
-                                                        anchors.rightMargin: 10
-                                                        anchors.verticalCenter: parent.verticalCenter
-                                                        text: effectChoice.selected ? "SELECTED" : "CHOOSE"
-                                                        color: effectChoice.selected
-                                                            ? root.accentColor : root.mutedColor
-                                                        font.pixelSize: 10
+                                                        width: parent.width
+                                                        height: 24
+                                                        verticalAlignment: Text.AlignVCenter
+                                                        text: effectGroup.modelData.title + " · "
+                                                            + effectGroup.modelData.effects.length
+                                                        color: root.mutedColor
+                                                        font.pixelSize: 11
                                                         font.bold: true
                                                     }
 
-                                                    MouseArea {
-                                                        anchors.fill: parent
-                                                        onClicked: root.chooseEffect(effectChoice.modelData.id)
+                                                    Repeater {
+                                                        model: effectGroup.modelData.effects
+                                                        delegate: Rectangle {
+                                                            id: effectChoice
+                                                            required property var modelData
+                                                            readonly property bool selected:
+                                                                modelData.id === root.currentPickerEffect()
+
+                                                            width: effectGroup.width
+                                                            height: 54
+                                                            radius: 7
+                                                            color: selected
+                                                                ? Commons.Util.alpha(root.accentColor, 0.22)
+                                                                : Commons.Color.background
+                                                            border.color: selected
+                                                                ? root.accentColor : Commons.Color.popups.border
+
+                                                            Column {
+                                                                anchors.left: parent.left
+                                                                anchors.leftMargin: 10
+                                                                anchors.right: detailsButton.left
+                                                                anchors.rightMargin: 8
+                                                                anchors.verticalCenter: parent.verticalCenter
+                                                                spacing: 3
+                                                                Text {
+                                                                    width: parent.width
+                                                                    text: effectChoice.modelData.name
+                                                                        + (effectChoice.modelData.renderingCost === "high"
+                                                                            ? " · HIGH GPU COST" : "")
+                                                                    color: root.foregroundColor
+                                                                    font.pixelSize: 12
+                                                                    font.bold: true
+                                                                    elide: Text.ElideRight
+                                                                }
+                                                                Text {
+                                                                    width: parent.width
+                                                                    text: String(effectChoice.modelData.pack
+                                                                        || effectChoice.modelData.source || "")
+                                                                        + (effectChoice.modelData.description
+                                                                            ? " · " + effectChoice.modelData.description : "")
+                                                                    color: root.mutedColor
+                                                                    font.pixelSize: 10
+                                                                    elide: Text.ElideRight
+                                                                }
+                                                            }
+
+                                                            Text {
+                                                                id: choiceState
+                                                                anchors.right: detailsButton.left
+                                                                anchors.rightMargin: 8
+                                                                anchors.bottom: parent.bottom
+                                                                anchors.bottomMargin: 5
+                                                                text: effectChoice.selected ? "SELECTED" : "CHOOSE"
+                                                                color: effectChoice.selected
+                                                                    ? root.accentColor : root.mutedColor
+                                                                font.pixelSize: 10
+                                                                font.bold: true
+                                                            }
+
+                                                            MouseArea {
+                                                                anchors.fill: parent
+                                                                anchors.rightMargin: detailsButton.visible ? 84 : 0
+                                                                onClicked: root.chooseEffect(effectChoice.modelData.id)
+                                                            }
+                                                            ActionButton {
+                                                                id: detailsButton
+                                                                anchors.right: parent.right
+                                                                anchors.rightMargin: 6
+                                                                anchors.verticalCenter: parent.verticalCenter
+                                                                label: "Details"
+                                                                buttonWidth: 72
+                                                                visible: effectChoice.modelData.id !== "global"
+                                                                onClicked: root.openEffectDetails(effectChoice.modelData.id)
+                                                            }
+                                                        }
                                                     }
                                                 }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        Rectangle {
+                            anchors.fill: parent
+                            visible: root.effectDetailsId !== ""
+                            color: Qt.rgba(0, 0, 0, 0.66)
+                            z: 110
+
+                            MouseArea {
+                                anchors.fill: parent
+                                onClicked: root.effectDetailsId = ""
+                            }
+
+                            Rectangle {
+                                id: effectDetailsCard
+                                readonly property var entry: root.service
+                                    ? root.service.effectDetails(root.effectDetailsId) : null
+
+                                anchors.centerIn: parent
+                                width: Math.min(560, parent.width - 30)
+                                height: Math.min(610, parent.height - 24)
+                                radius: 10
+                                color: root.panelColor
+                                border.color: Commons.Color.popups.border
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    onClicked: function(mouse) { mouse.accepted = true }
+                                }
+
+                                Column {
+                                    anchors.fill: parent
+                                    anchors.margins: 14
+                                    spacing: 9
+
+                                    Row {
+                                        width: parent.width
+                                        spacing: 8
+                                        Text {
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            width: parent.width - detailsBackButton.width - 8
+                                            text: effectDetailsCard.entry
+                                                ? effectDetailsCard.entry.name : "Effect unavailable"
+                                            color: root.foregroundColor
+                                            font.pixelSize: 17
+                                            font.bold: true
+                                            elide: Text.ElideRight
+                                        }
+                                        ActionButton {
+                                            id: detailsBackButton
+                                            label: "← Back"
+                                            buttonWidth: 76
+                                            onClicked: root.effectDetailsId = ""
+                                        }
+                                    }
+
+                                    Flickable {
+                                        width: parent.width
+                                        height: parent.height - 54
+                                        contentWidth: width
+                                        contentHeight: effectDetailsContent.height
+                                        clip: true
+
+                                        Column {
+                                            id: effectDetailsContent
+                                            width: parent.width
+                                            spacing: 10
+
+                                            Text {
+                                                width: parent.width
+                                                text: effectDetailsCard.entry
+                                                    ? effectDetailsCard.entry.description || "No description supplied."
+                                                    : "This effect is no longer available."
+                                                color: root.foregroundColor
+                                                font.pixelSize: 12
+                                                wrapMode: Text.Wrap
+                                            }
+                                            Text {
+                                                width: parent.width
+                                                text: !effectDetailsCard.entry ? ""
+                                                    : "Project: " + (effectDetailsCard.entry.pack || "OmaDecor")
+                                                        + " · License: " + (effectDetailsCard.entry.license || "Unknown")
+                                                        + " · Source: " + (effectDetailsCard.entry.source || "Unknown")
+                                                color: root.mutedColor
+                                                font.pixelSize: 11
+                                                wrapMode: Text.Wrap
+                                            }
+                                            Text {
+                                                width: parent.width
+                                                visible: effectDetailsCard.entry
+                                                    && String(effectDetailsCard.entry.author || "") !== ""
+                                                text: "Authors: " + (effectDetailsCard.entry
+                                                    ? effectDetailsCard.entry.author || "" : "")
+                                                color: root.mutedColor
+                                                font.pixelSize: 11
+                                                wrapMode: Text.Wrap
+                                            }
+                                            Text {
+                                                width: parent.width
+                                                visible: effectDetailsCard.entry
+                                                    && !!effectDetailsCard.entry.renderingCost
+                                                text: "Estimated rendering cost: "
+                                                    + (effectDetailsCard.entry
+                                                        ? effectDetailsCard.entry.renderingCost : "")
+                                                color: root.mutedColor
+                                                font.pixelSize: 11
+                                                wrapMode: Text.Wrap
+                                            }
+                                            Text {
+                                                width: parent.width
+                                                visible: effectDetailsCard.entry
+                                                    && effectDetailsCard.entry.provenance
+                                                    && effectDetailsCard.entry.provenance.url
+                                                text: "Original: " + (effectDetailsCard.entry
+                                                    ? effectDetailsCard.entry.provenance.url : "")
+                                                color: root.accentColor
+                                                font.pixelSize: 10
+                                                wrapMode: Text.WrapAnywhere
+                                            }
+                                            AnimatedImage {
+                                                visible: effectDetailsCard.entry
+                                                    && String(effectDetailsCard.entry.preview || "")
+                                                        .toLowerCase().endsWith(".gif")
+                                                width: parent.width
+                                                height: 170
+                                                fillMode: Image.PreserveAspectFit
+                                                source: visible ? "file://" + effectDetailsCard.entry.preview : ""
+                                                asynchronous: true
+                                                cache: false
+                                                playing: visible
+                                            }
+                                            Image {
+                                                visible: effectDetailsCard.entry
+                                                    && String(effectDetailsCard.entry.preview || "") !== ""
+                                                    && !String(effectDetailsCard.entry.preview)
+                                                        .toLowerCase().endsWith(".gif")
+                                                width: parent.width
+                                                height: 170
+                                                fillMode: Image.PreserveAspectFit
+                                                source: visible ? "file://" + effectDetailsCard.entry.preview : ""
+                                                asynchronous: true
+                                            }
+                                            Text {
+                                                width: parent.width
+                                                visible: effectDetailsCard.entry
+                                                    && String(effectDetailsCard.entry.preview || "") !== ""
+                                                text: effectDetailsCard.entry.source === "external"
+                                                    ? "Locally generated shader preview; actual compositor rendering may differ."
+                                                    : "Pack-supplied preview; actual compositor rendering may differ."
+                                                color: root.mutedColor
+                                                font.pixelSize: 10
+                                                wrapMode: Text.Wrap
+                                            }
+                                            Text {
+                                                width: parent.width
+                                                visible: !effectDetailsCard.entry
+                                                    || !effectDetailsCard.entry.preview
+                                                text: "No pack preview supplied; no user window is used for testing."
+                                                color: root.mutedColor
+                                                font.pixelSize: 10
+                                                wrapMode: Text.Wrap
+                                            }
+                                            Text {
+                                                width: parent.width
+                                                visible: root.service
+                                                    && root.service.effectParameterDefinitions(root.effectDetailsId).length > 0
+                                                text: "Parameters · shared by this pack's events"
+                                                color: root.foregroundColor
+                                                font.pixelSize: 13
+                                                font.bold: true
+                                            }
+                                            Repeater {
+                                                model: root.service
+                                                    ? root.service.effectParameterDefinitions(root.effectDetailsId) : []
+                                                delegate: EffectParameterRow {
+                                                    effectId: root.effectDetailsId
+                                                }
+                                            }
+                                            Text {
+                                                width: parent.width
+                                                visible: root.service
+                                                    && root.service.effectPresets(root.effectDetailsId).length > 0
+                                                text: "Presets"
+                                                color: root.foregroundColor
+                                                font.pixelSize: 13
+                                                font.bold: true
+                                            }
+                                            Flow {
+                                                width: parent.width
+                                                spacing: 6
+                                                Repeater {
+                                                    model: root.service
+                                                        ? root.service.effectPresets(root.effectDetailsId) : []
+                                                    delegate: ActionButton {
+                                                        required property string modelData
+                                                        label: modelData.charAt(0).toUpperCase()
+                                                            + modelData.slice(1)
+                                                        buttonWidth: 105
+                                                        onClicked: if (root.service) {
+                                                            var result = root.service.applyEffectPreset(
+                                                                root.effectDetailsId, modelData)
+                                                            root.actionMessage = result === "ok"
+                                                                ? "Preset applied — click Apply" : result
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            Row {
+                                                spacing: 8
+                                                ActionButton {
+                                                    label: "Use for " + root.effectEventTitle(root.effectPickerEvent)
+                                                    buttonWidth: 150
+                                                    enabled: effectDetailsCard.entry !== null
+                                                    onClicked: root.chooseEffect(root.effectDetailsId)
+                                                }
+                                                ActionButton {
+                                                    label: "Reset parameters"
+                                                    buttonWidth: 145
+                                                    visible: root.service
+                                                        && root.service.effectParameterDefinitions(root.effectDetailsId).length > 0
+                                                    onClicked: if (root.service) {
+                                                        var result = root.service.resetEffectParameters(root.effectDetailsId)
+                                                        root.actionMessage = result === "ok"
+                                                            ? "Parameters reset — click Apply" : result
+                                                    }
+                                                }
+                                            }
+                                            Text {
+                                                width: parent.width
+                                                text: root.actionMessage
+                                                color: root.mutedColor
+                                                font.pixelSize: 10
+                                                wrapMode: Text.Wrap
                                             }
                                         }
                                     }

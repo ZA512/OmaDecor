@@ -1,0 +1,20 @@
+
+void main() {
+    // HWS close textures cover a monitor. window_rect identifies the old window.
+    vec2 extent = max(window_rect.zw, vec2(0.000001));
+    vec2 geometry = (v_texcoord - window_rect.xy) / extent;
+    if (any(lessThan(geometry, vec2(0.0)))
+            || any(greaterThan(geometry, vec2(1.0)))) {
+        fragColor = vec4(0.0);
+        return;
+    }
+
+    niri_clamped_progress = clamp(progress, 0.0, 1.0);
+    niri_random_seed = seed;
+    niri_geo_to_tex = mat3(
+        vec3(window_rect.z, 0.0, 0.0),
+        vec3(0.0, window_rect.w, 0.0),
+        vec3(window_rect.x, window_rect.y, 1.0)
+    );
+    fragColor = NIRI_ENTRY(vec3(geometry, 1.0), vec3(surface_size * extent, 1.0));
+}

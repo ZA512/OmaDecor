@@ -1,0 +1,17 @@
+#version 320 es
+precision highp float;
+
+in vec2 v_texcoord;
+out vec4 fragColor;
+uniform sampler2D tex;
+uniform float progress;
+uniform float seed;
+uniform vec2 surface_size;
+uniform vec4 window_rect;
+
+// Niri's documented open/close subset, populated for each fragment.
+float niri_clamped_progress;
+float niri_random_seed;
+mat3 niri_geo_to_tex;
+#define niri_tex tex
+#define texture2D texture

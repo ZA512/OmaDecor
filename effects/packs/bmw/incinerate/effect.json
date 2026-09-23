@@ -1,0 +1,51 @@
+{
+  "$schema": "../../../schema/effect.schema.json",
+  "schemaVersion": 1,
+  "kind": "omadecor-effect-pack",
+  "id": "bmw/incinerate",
+  "name": "Incinerate (experimental)",
+  "version": "0.1.0",
+  "description": "A heat-driven dissolve with smoke and embers, ported from Burn My Windows.",
+  "source": {
+    "type": "ported",
+    "project": "Burn My Windows",
+    "url": "https://github.com/Schneegans/Burn-My-Windows/tree/9af4eb1f27244985e9e4fb3e7e4067a4dd6598e4",
+    "revision": "9af4eb1f27244985e9e4fb3e7e4067a4dd6598e4",
+    "authors": ["Simon Schneegans", "David Hoskins", "Inigo Quilez", "Nikita Miropolskiy"],
+    "portAuthors": ["OmaDecor contributors"],
+    "license": "GPL-3.0-or-later",
+    "adaptationNotes": "Original Incinerate and BMW common source are unchanged. A bounded HWS wrapper supplies BMW uniforms and alpha conversion. Preview status: experimental."
+  },
+  "compatibility": {
+    "sourceFormat": "bmw",
+    "events": ["open", "close"]
+  },
+  "shaders": {
+    "open": "incinerate.frag",
+    "close": "incinerate.frag"
+  },
+  "requires": [
+    "shader.progress",
+    "shader.random-seed",
+    "shader.window-texture",
+    "shader.window-size"
+  ],
+  "duration": {
+    "defaultMs": 2000,
+    "minMs": 300,
+    "maxMs": 5000
+  },
+  "renderingCost": "high",
+  "preview": "preview.gif",
+  "parameters": [
+    {"id": "scale", "name": "Scale", "type": "float", "default": 1.0,
+      "min": 0.1, "max": 3.0, "step": 0.1},
+    {"id": "turbulence", "name": "Turbulence", "type": "float", "default": 0.3,
+      "min": 0.0, "max": 1.0, "step": 0.05},
+    {"id": "color", "name": "Fire Color", "type": "color", "default": "#ffb47f"}
+  ],
+  "presets": {
+    "subtle": {"scale": 0.7, "turbulence": 0.2},
+    "dramatic": {"scale": 1.6, "turbulence": 0.6}
+  }
+}

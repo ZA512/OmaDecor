@@ -17,9 +17,15 @@ omarchy plugin validate .
   decorations/ThemeCompiler.js \
   decorations/DecorationThemeLoader.qml \
   effects/EngineDetector.qml \
+  effects/EffectValidator.js \
+  effects/EffectSearch.js \
+  effects/EffectMetadata.js \
+  effects/EffectPack.js \
+  effects/EffectPackRegistry.qml \
   effects/ShaderCatalog.qml \
   effects/CompatibilityManager.qml \
   effects/EffectsManager.qml \
+  effects/backends/HyprWindowShadeBackend.qml \
   hud/SystemMetrics.qml \
   decorations/NativeDecorationRegistry.qml
 
@@ -51,12 +57,50 @@ jq -e '.schemaVersion == 1 and (.validated | type == "array") and (.effects | ty
   compatibility/hyprwindowshade.json >/dev/null
 
 bash -n scripts/install-effects.sh
+bash -n scripts/scan-effect-packs.sh
+bash -n scripts/scan-external-shaders.sh
+bash -n scripts/compile-niri-shader.sh
+bash -n scripts/compile-bmw-incinerate.sh
+
+jq -e '
+  .["$schema"] == "https://json-schema.org/draft/2020-12/schema"
+  and .properties.schemaVersion.const == 1
+  and .properties.kind.const == "omadecor-effect-pack"
+' effects/schema/effect.schema.json >/dev/null
+
+jq -e '
+  .schemaVersion == 1
+  and .kind == "omadecor-effect-pack"
+  and .id == "omadecor/simple-dissolve"
+  and .compatibility.events == ["open", "close"]
+  and (.shaders | keys | sort) == ["close", "open"]
+' effects/packs/native/simple-dissolve/effect.json >/dev/null
+
+scripts/scan-effect-packs.sh --trusted-root effects/packs \
+  | jq -se '
+    length == 3
+    and all(.[]; .ok)
+    and ([.[].manifest.id] | sort) == ["bmw/incinerate", "liixini/circle", "omadecor/simple-dissolve"]
+    and (.[] | select(.manifest.id == "liixini/circle") | .artifacts
+        | has("open") and has("close"))
+    and (.[] | select(.manifest.id == "bmw/incinerate") | .artifacts
+        | has("open") and has("close"))
+  ' >/dev/null
 
 if command -v node >/dev/null 2>&1; then
   node scripts/validate-theme.js decorations/styles/raised-edge.omadecor.json
   node scripts/validate-theme.js tests/fixtures/edge-rect.omadecor.json
   node tests/decoration_theme_compiler.test.js
+  node tests/effect_pack.test.js
+  node tests/shader_preview.test.js
+  node tests/effect_search.test.js
+  node tests/config_effect_ids.test.js
   node tests/effects_rule_generator.test.js
+fi
+
+if pkg-config --exists egl glesv2; then
+  ${CXX:-g++} -std=c++20 -Wall -Wextra -Wpedantic -fsyntax-only \
+    scripts/preview-renderer.cpp $(pkg-config --cflags egl glesv2)
 fi
 
 native_test_dir=$(mktemp -d)
@@ -69,7 +113,7 @@ ${CXX:-g++} -std=c++2b -Wall -Wextra -Wpedantic \
   tests/fixtures/edge-rect.omadecor.json
 
 if command -v glslangValidator >/dev/null 2>&1; then
-  for shader in effects/shaders/*.glsl; do
+  for shader in effects/shaders/*.glsl effects/packs/native/*/*.glsl; do
     glslangValidator -S frag "$shader"
   done
 fi

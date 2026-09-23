@@ -1,8 +1,8 @@
 # Devbook — OmaDecor
 
-**Status:** M0–M6 implemented locally; HyprWindowShade and physical multi-monitor validation pending
-**Last verified:** 2026-09-21  
-**Product source of truth:** [`PRD.md`](PRD.md), as amended by this decision record
+**Status:** M0–M6 and Effects E1–E3 implemented locally; E4 Incinerate is an experimental port, with cross-monitor/GPU acceptance pending
+**Last verified:** 2026-09-23
+**Product source of truth:** [`PRD.md`](PRD.md) and [`effect.md`](effect.md), as amended by this decision record and [`EFFECTS_RESEARCH.md`](EFFECTS_RESEARCH.md)
 
 ## 1. Approved Architecture
 
@@ -87,7 +87,7 @@ Theme mode is enabled by default. `core/ThemeBridge.qml` consumes Omarchy's exis
 native/                    Hyprland plugin and build
 core/                      normalized state; HUD geometry only
 hud/                       Quickshell HUD surfaces and metrics
-effects/                   HyprWindowShade detection, catalogue, rules, and shaders
+effects/                   backend-neutral orchestration, EffectPack registry, backends, packs, and shaders
 compatibility/             tested fingerprints
 docs/                      decisions and evidence
 tests/                     automated regression tests
@@ -105,14 +105,111 @@ The three desired module toggles are independent. Decorations are enabled by def
 
 Application rules are normalized, deduplicated by case-insensitive class, and stored in `applications`. Decorations, HUD, and Effects exclusions are independent. Decoration exclusions are converted to exact native class matches; unsafe class strings never reach `hyprctl`. The panel lists running applications and retains the last active non-OmaDecor window for quick rule creation.
 
-Effects keep desired state separate from runtime permission. `EngineDetector` distinguishes a loaded plugin from a hyprpm state entry; `CompatibilityManager` fingerprints the Hyprland ABI and the metadata actually exposed by HyprWindowShade. Unknown fingerprints are `UNTESTED` and safely suspended unless the user records an exact-fingerprint override. `EffectsManager` atomically owns only `~/.config/hypr/omadecor.lua`; generated rules are prefixed `omadecor-effects-*`, reloaded, then evaluated explicitly, and manual rules are untouched. Application-specific tags override global fallback tags. `None` and whole-application exclusions use a transparent pass-through shader, with exclusion taking precedence over stored per-event choices.
+Effects keep desired state separate from runtime permission. `EffectsManager` is
+backend-neutral: it resolves catalogue choices and application inheritance but
+contains no HyprWindowShade tag syntax. `effects/backends/HyprWindowShadeBackend.qml`
+owns engine detection, compatibility fingerprints, capabilities, duration/tag
+mapping, exclusions, atomic generation of `~/.config/hypr/omadecor.lua`, reload,
+evaluation, and diagnostics. Its generated rules remain prefixed
+`omadecor-effects-*`; manual rules are untouched. Application-specific tags
+override global fallback tags. `None` and whole-application exclusions use a
+transparent pass-through shader, with exclusion taking precedence over stored
+per-event choices.
+
+Hyprland keeps dynamic shader tags on already-open windows after a named rule
+is removed. On Apply, the backend reads its previous generated rules and the
+live window tags, emits removal rules for previously owned tags before the new
+rules, then evaluates the file. The live scan migrates older global fallback
+tags only when their shader paths are under OmaDecor-managed directories;
+unrelated manual shader tags are not targeted. A regression test covers
+effect → `None`, re-selection, and suspended Effects.
+The Apply path keeps a pending request while a pack scan or compositor reload
+is busy, then retries it after the active application finishes. It clears the
+pending indicator only if the configuration revision still matches what was
+applied. Toggling the Effects module applies immediately; loss of ABI permission
+queues safe deactivation. Live acceptance on Hyprland 0.56.2 covered module
+Off/On, rapid Apply requests, per-application exclusion, `None` → Global
+inheritance, and removal of the temporary application entry.
+Configuration persistence ignores short-lived file-watch echoes from its own
+atomic saves and serializes overlapping writes. A rapid Off/On + effect-change
+sequence now retains the final in-memory choice on disk and after shell restart.
 
 The Effects page launches an explicit interactive installer rather than a
 background download. HyprWindowShade remains managed by `hyprpm`; the external
 Hyprland-Shader checkout remains under the user data directory. `ShaderCatalog`
-watches that checkout and builds event-filtered entries from readable
-`*_open.glsl` and `*_close.glsl` files. The picker therefore scales to the
-pack's 55 pairs without cycling through choices one click at a time.
+scans that checkout at startup and on **Check again**, then builds
+event-filtered entries from regular `*_open.glsl` and `*_close.glsl` files.
+Symlink aliases are ignored, so the picker exposes the pack's 55 physical
+pairs without duplicate names or one-click cycling through every choice.
+Before changing the system, the installer requires explicit confirmation,
+checks the supported Hyprland series, verifies every build tool documented by
+HyprWindowShade, and maps missing commands to Arch package names for
+`omarchy pkg add` (`pkg-config` → `pkgconf`, `g++` → `gcc`). It recovers from
+stale header metadata with `hyprpm update`, then retries the original install.
+The shell service issues `hyprpm reload -n` while restoring enabled Effects,
+satisfying the engine's session-start loading requirement without editing the
+user's main Hyprland configuration.
+
+Effect timing is persisted per event. `open`, `close`, `focus`, `unfocus`, and
+`urgent` sliders generate HyprWindowShade `@seconds` duration overrides in the
+0.10–2.00 s range. Transform sliders (`move`, `resize`, `workspace`,
+fullscreen, float, and tile) generate 0–1.20 s settle tails; Hyprland's own
+animation remains the clock for the movement itself. Defaults favor visible
+open/close effects while keeping focus cues and transform tails responsive.
+Per-application effect choices inherit the corresponding global event timing.
+
+EffectPack V1 is an inert, local-only format described by
+`effects/schema/effect.schema.json`. `EffectPackRegistry` discovers bundled
+packs and user packs under `~/.local/share/omadecor/effects/`, validates their
+metadata, provenance, licence file, canonical paths and GLSL before exposing
+normalized catalogue entries. Pack files cannot execute shell, JavaScript,
+Python, Lua, binaries, installers, or network requests. E2 deliberately accepts
+only self-contained, single-pass GLSL; compatibility-layer include expansion is
+deferred. The bundled `omadecor/simple-dissolve` pack proves open/close execution
+without a source-format adapter.
+
+E3 adds a constrained Niri open/close source adapter in
+`effects/compat/niri/`. The scanner compiles supported, unmodified Niri
+functions into content-addressed HWS artifacts under
+`~/.cache/omadecor/effects/niri-v1/`; the catalogue receives only those
+artifacts. The bundled MIT `liixini/circle` pack carries the pinned source,
+licence, and credits. Unsupported Niri symbols, events, declarations, and
+uncompilable shaders fail locally without hiding valid packs. The source
+functions and source hashes are unchanged from the pinned upstream revision.
+Compilation, catalogue exposure, HWS rule application, and restoration of the
+previous Effects state passed on the local machine. A later live test exposed
+that `ConfigStore` rejected `/` in pack effect IDs and silently selected
+`none`; the ID validator now accepts canonical `namespace/name.event` values,
+with a regression test. Corrected live tests show both the circular open
+reveal and close mask. The close test used an opaque GTK window: Foot's close
+capture appeared empty even with Simple Fade, so Foot was not a valid texture
+reference for comparing these two effects. Other GPUs remain open acceptance
+gates; Niri resize remains unsupported.
+
+E4 adds a narrowly pinned GPL-3.0-or-later Incinerate pack under
+`effects/packs/bmw/incinerate/`. Original BMW shader and common source hashes
+are preserved; the adapter produces validated, content-addressed HWS shaders
+in `~/.cache/omadecor/effects/bmw-incinerate-v1/`. It maps the HWS close
+snapshot through `window_rect`, converts premultiplied input/output, and uses
+a stable seeded edge in place of BMW's pointer origin. On the local 3440×1440
+display, a full-size test showed fire, smoke, embers, and a clean final close
+frame without compositor failure. A 900×600 floating close also showed the
+burn front, smoke, and embers when the effect rules were explicitly applied
+before window creation and the window was closed through Hyprland. A separate
+GTK close test confirmed that the original window content burns away, not
+only the procedural flames. Earlier captures without those conditions were
+invalid test evidence. Thus E4 is
+**experimental, not GO**. The E5 slice now persists validated pack parameters,
+offers generated controls and presets in the effect details view, and recompiles
+Incinerate against each event's selected duration on Apply. Static and animated
+pack previews are supported. A bounded EGL surfaceless authoring tool renders
+all three trusted bundled shaders in one pass on a synthetic window; these
+GIFs are not compositor captures or cross-GPU evidence. Generic BMW
+compatibility is not claimed. The same tool can, by explicit `external` opt-in,
+batch-render the 55 installed Hyprland-Shader open/close pairs into a
+content-addressed user cache. Per-pair validation, timeouts and failure
+isolation allow a rerun to resume, but cannot eliminate GPU-driver risk from
+third-party GLSL. The original shader collection is never modified.
 
 ## 6. Build and Development
 
@@ -135,6 +232,11 @@ HUD acceptance is separate: click-through surfaces, immediate hide on movement, 
 
 Effects acceptance is also separate and must pass when HyprWindowShade is absent, unloaded, incompatible, or broken.
 
+EffectPack acceptance covers schema and semantic validation, duplicate IDs,
+backend capability filtering, manifest/shader size budgets, traversal and
+symlink rejection, required licence/provenance, GLSL compilation, and fail-soft
+handling of one invalid pack without hiding valid packs.
+
 M1 runtime validation covers first-run config creation, atomic persistence, all three toggles, native width/color/exclusion clamping, stock-border restoration, panel service identity, malformed JSON degradation, explicit reset, and a clean `hyprctl configerrors` result.
 
 M2 local validation covers style registry discovery, theme-accent propagation (`#00e5ff` on the development theme), inactive alpha propagation, manual/theme color switching, structured application-rule persistence, native exclusion add/remove, running-application discovery, panel lifecycle, and monitor diagnostics. The available hardware reports one scale-1 monitor, so negative-origin, mixed-scale, and cross-monitor transfer remain blocked rather than inferred.
@@ -151,7 +253,13 @@ M3 local validation covers real HUD rendering, independent metrics, fullscreen s
 6. **M5 — Effects configuration:** implemented locally for bundled and discovered external shaders, a scrollable event picker, global event mapping, per-application inheritance/exclusion/replacement, owned-rule generation, and explicit Apply workflow.
 7. **M6 — Compatibility:** fingerprint lifecycle, exact-fingerprint overrides, effect-specific degradation, safe suppression, transition notifications, and diagnostics are implemented. No HyprWindowShade combination is marked validated until the external engine is installed and the effect matrix is tested.
 8. **M6.1 — Decoration themes:** V1 Core schema, dual semantic validation, native compilation/rendering, safe fallback, watched user-theme catalogue, generated parameter controls, canonical Raised Edge theme, and regression tests are implemented.
-9. **M7 — Release:** `hyprpm` commit pins, documentation, licenses, recovery, and exact release validation.
+9. **Effects E0 — Research:** API/licence matrices, EffectPack V1 proposal, backend contract, Niri/BMW feasibility and Incinerate strategy are recorded in `EFFECTS_RESEARCH.md`.
+10. **Effects E1 — Backend abstraction:** implemented; all HWS rule syntax and apply lifecycle are isolated under `effects/backends/` with existing configuration and visuals preserved.
+11. **Effects E2 — EffectPack V1:** implemented; executable schema, semantic/filesystem validator, local registry, normalized metadata, capability filtering, and the native Simple Dissolve reference pack are functional.
+12. **Effects E3 — Niri compatibility:** constrained open/close adapter and unchanged pinned Circle source are integrated; both transitions are visually confirmed on the local GPU, while portability acceptance remains pending.
+13. **Effects E4 — BMW Incinerate spike:** pinned GPL source, adapter, and experimental pack are integrated; full-size and floating close visuals work locally, but multi-monitor and cross-GPU gates remain open.
+14. **Effects E5 — GUI slice:** effect details, visible credits/provenance and cost estimates, generated pack-parameter controls, presets, duration-aware Apply, searchable choices grouped by provenance, and animated pack-preview support are implemented. All three bundled packs ship offscreen shader-rendered previews; broader UX and compositor-fidelity validation remain open.
+15. **M7 — Release:** `hyprpm` commit pins, documentation, licenses, recovery, and exact release validation.
 
 ## 9. Risks and Maintenance
 
