@@ -57,6 +57,8 @@ jq -e '.schemaVersion == 1 and (.validated | type == "array") and (.effects | ty
   compatibility/hyprwindowshade.json >/dev/null
 
 bash -n scripts/install-effects.sh
+bash -n scripts/doctor.sh
+bash tests/doctor.test.sh
 bash -n scripts/scan-effect-packs.sh
 bash -n scripts/scan-external-shaders.sh
 bash -n scripts/compile-niri-shader.sh

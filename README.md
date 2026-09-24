@@ -66,6 +66,23 @@ omarchy bar put omadecor --section right
 omarchy restart shell
 ```
 
+If the widget or decoration is missing, run the read-only installation check
+from an OmaDecor checkout (or the installed plugin directory):
+
+```bash
+bash scripts/doctor.sh
+```
+
+It checks the Omarchy plugin, bar placement, running Hyprland version, loaded
+native component, and `hyprpm` registration. It does not install packages or
+change your configuration. A manually loaded `.so` works only for the current
+session; register and enable it with `hyprpm` for managed reloads. On this
+Omarchy baseline, a session-start `hyprpm reload -n` is also needed unless
+Effects are enabled (their service already performs that reload). If you keep
+Effects off, add `o.exec_on_start("hyprpm reload -n")` to your personal
+`~/.config/hypr/autostart.lua`. The check reports current-session state; it
+cannot prove that a startup reload is set.
+
 ### Optional window effects
 
 Open **OD → Effects** and click **Install / update**. OmaDecor opens an
